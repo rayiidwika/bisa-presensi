@@ -57,7 +57,7 @@ export default function HomePage() {
     ];
 
     const tRekap = `${daysShort[now.getDay()]}, ${now.getDate()} ${monthsFull[now.getMonth()]}`;
-    const tCard = `${daysFull[now.getDay()]} , ${now.getDate()} ${monthsShort[now.getMonth()]} ${now.getFullYear()}`;
+    const tCard = `${daysFull[now.getDay()]}, ${now.getDate()} ${monthsShort[now.getMonth()]} ${now.getFullYear()}`;
     const mYear = `${monthsFull[now.getMonth()]} ${now.getFullYear()}`;
 
     setTodayRekapDate(tRekap);
@@ -303,36 +303,24 @@ export default function HomePage() {
             TAP - PT BISA MEDIA GRUP
           </div>
 
-          {/* Employee Card Body */}
+          {/* Employee Card Body - Top Row: Info Karyawan & Avatar */}
           <div className="flex items-center justify-between mt-3.5">
-            {/* Left Column: Info Karyawan & Jadwal (Font lebih besar & jelas) */}
-            <div className="flex-1 flex flex-col justify-between pr-3">
-              <div>
-                <h2 className="text-[21px] font-black text-slate-800 leading-tight tracking-tight">
-                  Setiawan
-                </h2>
-                <p className="text-[13px] text-slate-500 font-semibold mt-1">
-                  Divisi : Information Technology
-                </p>
-                <p className="text-[13px] text-slate-500 font-semibold mt-0.5">
-                  Staff : Information Technology
-                </p>
-              </div>
-
-              <div className="mt-4 pt-0.5">
-                <p className="text-slate-400 font-semibold text-[12px]">
-                  {todayCardDate}
-                </p>
-                <p className="font-extrabold text-slate-700 text-[13.5px] mt-0.5">
-                  Reguler
-                </p>
-              </div>
+            {/* Info Karyawan: Nama & Divisi & Staff */}
+            <div className="flex-1 pr-3">
+              <h2 className="text-[21px] font-black text-slate-800 leading-tight tracking-tight">
+                Setiawan
+              </h2>
+              <p className="text-[13px] text-slate-500 font-semibold mt-1">
+                Divisi : Information Technology
+              </p>
+              <p className="text-[13px] text-slate-500 font-semibold mt-0.5">
+                Staff : Information Technology
+              </p>
             </div>
 
-            {/* Right Column: Avatar + Jadwal & Jam Kerja (Digeser lebih ke kiri / lebih ke tengah) */}
-            <div className="flex flex-col items-center justify-center text-center mr-3 sm:mr-5 shrink-0">
-              {/* Avatar Profile (Circle with Slate Silhouette) */}
-              <div className="w-[68px] h-[68px] rounded-full bg-[#d8e5ee] border-2 border-white shadow-sm flex items-center justify-center overflow-hidden shrink-0">
+            {/* Avatar Profile (Circle with Slate Silhouette) */}
+            <div className="w-[125px] flex justify-center mr-2 sm:mr-4 shrink-0">
+              <div className="w-[68px] h-[68px] rounded-full bg-[#d8e5ee] border-2 border-white shadow-sm flex items-center justify-center overflow-hidden">
                 <svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
                   <circle cx="32" cy="24" r="11" fill="#475569" />
                   <path
@@ -341,16 +329,31 @@ export default function HomePage() {
                   />
                 </svg>
               </div>
+            </div>
+          </div>
 
-              {/* Shift Hours & Total Jam Kerja (Centered under Avatar) */}
-              <div className="mt-2.5 flex flex-col items-center">
+          {/* Employee Card Body - Bottom Rows: Jadwal Hari & Jam Kerja (Sejajar Sempurna Kiri-Kanan) */}
+          <div className="mt-4 pt-1 space-y-1.5">
+            {/* Baris 1: Tanggal (Kiri) & Jam Shift (Kanan) */}
+            <div className="flex items-center justify-between">
+              <p className="text-slate-400 font-semibold text-[12px] leading-tight">
+                {todayCardDate}
+              </p>
+              <div className="w-[125px] text-center mr-2 sm:mr-4 shrink-0">
                 <p className="font-extrabold text-slate-800 text-[13.5px] leading-tight tracking-wide">
                   08.00 - 17.00
                 </p>
-                <div className="flex items-center justify-center gap-1.5 text-slate-600 font-bold text-[13px] mt-1.5">
-                  <Clock size={14} className="text-[#156bb8] shrink-0" strokeWidth={2.4} />
-                  <span className="whitespace-nowrap">{totalWorkHoursToday}</span>
-                </div>
+              </div>
+            </div>
+
+            {/* Baris 2: Shift Reguler (Kiri) & Total Jam Kerja (Kanan) */}
+            <div className="flex items-center justify-between">
+              <p className="font-extrabold text-slate-700 text-[13.5px] leading-tight">
+                Reguler
+              </p>
+              <div className="w-[125px] flex items-center justify-center gap-1.5 text-slate-600 font-bold text-[13px] leading-tight mr-2 sm:mr-4 shrink-0">
+                <Clock size={14} className="text-[#156bb8] shrink-0" strokeWidth={2.4} />
+                <span className="whitespace-nowrap">{totalWorkHoursToday}</span>
               </div>
             </div>
           </div>
