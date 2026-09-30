@@ -16,6 +16,8 @@ import {
   Navigation,
   ShieldCheck,
   MessageSquare,
+  ChevronLeft,
+  Coffee,
 } from "lucide-react";
 
 const TASIK_LAT = -7.3274;
@@ -25,7 +27,7 @@ export default function AbsensiDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
-  const rec = mockAttendanceRecords.find((r) => r.id === id);
+  const rec = mockAttendanceRecords.find((r) => r.id === id) || (id === "today" ? mockAttendanceRecords[0] : null);
   if (!rec) notFound();
 
   // Mode tab: "in" (Clock In) atau "out" (Clock Out)
@@ -35,6 +37,9 @@ export default function AbsensiDetailPage() {
   const [savedData, setSavedData] = useState<{
     checkIn?: string;
     checkOut?: string;
+    breakStart?: string;
+    breakEnd?: string;
+    break?: string;
     photo?: string;
     checkInPhoto?: string;
     checkOutPhoto?: string;
@@ -47,11 +52,23 @@ export default function AbsensiDetailPage() {
     checkInNotes?: string;
     checkOutNotes?: string;
     notes?: string;
+    dateStr?: string;
   } | null>(null);
 
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
+  const [todayDateDetail, setTodayDateDetail] = useState<string>("Rab, 30 September 2026");
 
   useEffect(() => {
+    const now = new Date();
+    const daysShort = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+    const monthsFull = [
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    ];
+    setTodayDateDetail(
+      `${daysShort[now.getDay()]}, ${now.getDate()} ${monthsFull[now.getMonth()]} ${now.getFullYear()}`
+    );
+
     try {
       const stored = localStorage.getItem("bisa_attendance_today");
       if (stored) {
@@ -62,129 +79,236 @@ export default function AbsensiDetailPage() {
     }
   }, []);
 
-  // Sinkronisasi data dari localStorage dan record
-  const checkInTime =
-    (typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkin_time")) ||
-    savedData?.checkIn ||
-    rec.checkIn ||
-    "07:59";
+  const isTodayRecord = id === "today" || id === "ATT-001" || rec.id === "today" || rec.id === "ATT-001";
 
-  const checkOutTime =
-    (typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkout_time")) ||
-    savedData?.checkOut ||
-    rec.checkOut ||
-    "17:02";
+  // Sinkronisasi data dari record (atau localStorage jika id === "today")
+  const checkInTime = isTodayRecord
+    ? ((typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkin_time")) ||
+       savedData?.checkIn ||
+       rec.checkIn ||
+       "07:59")
+    : (rec.checkIn || "07:59");
 
-  const checkInLocation =
-    (typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkin_location")) ||
-    savedData?.checkInLocation ||
-    savedData?.locationAddress ||
-    rec.locationAddress ||
-    "Jl. HZ. Mustofa No. 45, Kota Tasikmalaya";
+  const checkOutTime = isTodayRecord
+    ? ((typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkout_time")) ||
+       savedData?.checkOut ||
+       rec.checkOut ||
+       "17:02")
+    : (rec.checkOut || "17:02");
 
-  const checkOutLocation =
-    (typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkout_location")) ||
-    savedData?.checkOutLocation ||
-    savedData?.locationAddress ||
-    rec.locationAddress ||
-    "Jl. HZ. Mustofa No. 45, Kota Tasikmalaya";
+  // Data Jam Istirahat (Mulai s.d Selesai)
+  const breakStart = isTodayRecord
+    ? (savedData?.breakStart ||
+       savedData?.break ||
+       (typeof window !== "undefined" && localStorage.getItem("bisa_attendance_break_start")) ||
+       "12:00")
+    : ((rec as any).breakStart || "12:00");
+
+  const breakEnd = isTodayRecord
+    ? (savedData?.breakEnd ||
+       (typeof window !== "undefined" && localStorage.getItem("bisa_attendance_break_end")) ||
+       "13:00")
+    : ((rec as any).breakEnd || "13:00");
+
+  const breakTimeDisplay = `${breakStart} - ${breakEnd}`;
+
+  const checkInLocation = isTodayRecord
+    ? ((typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkin_location")) ||
+       savedData?.checkInLocation ||
+       savedData?.locationAddress ||
+       rec.locationAddress ||
+       "Jl. HZ. Mustofa No. 45, Kota Tasikmalaya")
+    : (rec.locationAddress || "Jl. HZ. Mustofa No. 45, Kota Tasikmalaya");
+
+  const checkOutLocation = isTodayRecord
+    ? ((typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkout_location")) ||
+       savedData?.checkOutLocation ||
+       savedData?.locationAddress ||
+       rec.locationAddress ||
+       "Jl. HZ. Mustofa No. 45, Kota Tasikmalaya")
+    : (rec.locationAddress || "Jl. HZ. Mustofa No. 45, Kota Tasikmalaya");
 
   // Koordinat lokasi
-  const inCoords = savedData?.checkInCoords || savedData?.coords || {
-    lat: rec.latitude || TASIK_LAT,
-    lng: rec.longitude || TASIK_LNG,
-  };
-  const outCoords = savedData?.checkOutCoords || savedData?.coords || {
-    lat: rec.latitude || TASIK_LAT,
-    lng: rec.longitude || TASIK_LNG,
-  };
+  const inCoords = isTodayRecord
+    ? (savedData?.checkInCoords || savedData?.coords || {
+        lat: rec.latitude || TASIK_LAT,
+        lng: rec.longitude || TASIK_LNG,
+      })
+    : {
+        lat: rec.latitude || TASIK_LAT,
+        lng: rec.longitude || TASIK_LNG,
+      };
+
+  const outCoords = isTodayRecord
+    ? (savedData?.checkOutCoords || savedData?.coords || {
+        lat: rec.latitude || TASIK_LAT,
+        lng: rec.longitude || TASIK_LNG,
+      })
+    : {
+        lat: rec.latitude || TASIK_LAT,
+        lng: rec.longitude || TASIK_LNG,
+      };
 
   const activeCoords = activeTab === "in" ? inCoords : outCoords;
   const activeLocation = activeTab === "in" ? checkInLocation : checkOutLocation;
   const activeTime = activeTab === "in" ? checkInTime : checkOutTime;
 
   // Foto Dokumentasi: diambil dari jepretan kamera saat Clock In vs Clock Out
-  const inPhoto =
-    (typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkin_photo")) ||
-    savedData?.checkInPhoto ||
-    savedData?.photo ||
-    "/default-face-scan.jpg";
+  const inPhoto = isTodayRecord
+    ? ((typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkin_photo")) ||
+       savedData?.checkInPhoto ||
+       savedData?.photo ||
+       "/default-face-scan.jpg")
+    : (rec.selfieUrl || "/default-face-scan.jpg");
 
-  const outPhoto =
-    (typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkout_photo")) ||
-    savedData?.checkOutPhoto ||
-    "/default-checkout-scan.jpg";
+  const outPhoto = isTodayRecord
+    ? ((typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkout_photo")) ||
+       savedData?.checkOutPhoto ||
+       "/default-checkout-scan.jpg")
+    : "/default-checkout-scan.jpg";
 
   const activePhoto = activeTab === "in" ? inPhoto : outPhoto;
 
   // Catatan kehadiran: Clock In & Clock Out murni masing-masing
-  const checkInNotes =
-    (typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkin_notes")) ||
-    savedData?.checkInNotes ||
-    rec.checkInNotes ||
-    "";
+  const checkInNotes = isTodayRecord
+    ? ((typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkin_notes")) ||
+       savedData?.checkInNotes ||
+       rec.checkInNotes ||
+       "")
+    : (rec.checkInNotes || "");
 
-  const checkOutNotes =
-    (typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkout_notes")) ||
-    savedData?.checkOutNotes ||
-    rec.checkOutNotes ||
-    "";
+  const checkOutNotes = isTodayRecord
+    ? ((typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkout_notes")) ||
+       savedData?.checkOutNotes ||
+       rec.checkOutNotes ||
+       "")
+    : (rec.checkOutNotes || "");
 
   const sc = attStatusColors(rec.status);
 
+  // Perhitungan Total Jam Kerja:
+  // - Jam masuk kantor: 08:00 (jika absen lebih awal, mulai dihitung 08:00; jika terlambat misal 08:01, dihitung 08:01)
+  // - Istirahat: 12:00 - 13:00 (1 jam tidak dihitung kerja)
+  // - Jam pulang kantor standar: 17:00 (jika clock out lebih dari jam 17:00, tetap dihitung maksimal sampai jam 17:00)
+  // - Contoh: Absen masuk 08:01, pulang 17:00 -> Total jam kerja 07.59
+  const calculateTotalWorkHours = (inStr?: string, outStr?: string): string => {
+    if (!inStr || !outStr) return "08.00";
+
+    const parseToMinutes = (str: string): number | null => {
+      const match = str.trim().match(/(\d{1,2})[:.](\d{2})(?:\s*([AP]M))?/i);
+      if (!match) return null;
+      let h = parseInt(match[1], 10);
+      const m = parseInt(match[2], 10);
+      const mer = match[3]?.toUpperCase();
+      if (mer === "PM" && h < 12) h += 12;
+      if (mer === "AM" && h === 12) h = 0;
+      return h * 60 + m;
+    };
+
+    const inMin = parseToMinutes(inStr);
+    const outMin = parseToMinutes(outStr);
+
+    if (inMin === null || outMin === null) return "08.00";
+
+    // Maksimal clock out dihitung sampai jam 17:00 (1020 menit)
+    const cappedOut = Math.min(outMin, 1020);
+
+    // 1. Sesi Pagi (08:00 = 480 s.d 12:00 = 720)
+    // Jika masuk lebih awal dari 08:00 (misal 07:59), mulai dihitung dari 08:00
+    // Jika masuk terlambat (misal 08:01), mulai dihitung dari jam masuknya
+    const morningStart = Math.max(480, inMin);
+    const morningEnd = Math.min(720, cappedOut);
+    const morningMinutes = Math.max(0, morningEnd - morningStart);
+
+    // 2. Sesi Siang (13:00 = 780 s.d 17:00 = 1020)
+    // Jika karyawan sudah masuk sejak pagi/sebelum siang, siang dimulai jam 13:00 (780)
+    const afternoonStart = inMin <= 780 ? 780 : Math.max(780, inMin);
+    const afternoonEnd = Math.min(1020, cappedOut);
+    const afternoonMinutes = Math.max(0, afternoonEnd - afternoonStart);
+
+    const totalMinutes = morningMinutes + afternoonMinutes;
+    if (totalMinutes <= 0) return "00.00";
+
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+
+    const formattedHours = String(hours).padStart(2, "0");
+    const formattedMins = String(mins).padStart(2, "0");
+
+    return `${formattedHours}.${formattedMins}`;
+  };
+
+  const totalWorkHours = calculateTotalWorkHours(checkInTime, checkOutTime);
+
   return (
     <div className="min-h-screen bg-[#ddeef8] pb-10">
-      {/* ══════════════ BLUE HEADER ══════════════ */}
-      <div className="bg-gradient-to-b from-[#3b9edd] to-[#1a6fb5] relative overflow-hidden">
-        {/* Watermark circle */}
-        <div className="absolute -top-8 -right-8 w-36 h-36 rounded-full bg-white/10" />
+      {/* ══════════════ BLUE GRADIENT HEADER WITH WATERMARK ══════════════ */}
+      <div className="bg-gradient-to-b from-[#2a8ee4] via-[#1f7cd0] to-[#156bb8] relative overflow-hidden">
+        {/* Watermark Logo Bisa Media Putih Blur di ujung kanan */}
+        <div className="absolute -right-6 -top-4 w-60 h-60 pointer-events-none opacity-25 filter blur-[0.8px] rotate-[-6deg] select-none">
+          <img
+            src="/bisa-media-white.png"
+            alt="Watermark BISA MEDIA"
+            className="w-full h-full object-contain"
+          />
+        </div>
 
         <div className="relative px-4 pt-5 pb-6">
-          <div className="flex items-center gap-3 mb-4">
-            <button
-              onClick={() => router.back()}
-              aria-label="Kembali"
-              className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 active:scale-95 flex items-center justify-center transition-all"
-            >
-              <svg
-                width="15"
-                height="15"
-                fill="none"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                viewBox="0 0 24 24"
+          {/* Top bar (Tombol Kembali & Detail Check In & Out) */}
+          <div className="relative z-10 mb-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.back()}
+                aria-label="Kembali"
+                className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 active:scale-95 flex items-center justify-center text-white transition-all backdrop-blur-xs cursor-pointer shrink-0"
               >
-                <path d="M15 18l-6-6 6-6" />
-              </svg>
-            </button>
-            <p className="text-white text-sm opacity-90 font-medium">
-              Hallo {currentEmployee.name}
-            </p>
+                <ChevronLeft size={22} />
+              </button>
+              <h1 className="text-white font-extrabold text-[17.5px] sm:text-[18.5px] tracking-wide leading-tight truncate">
+                Detail Check In & Out
+              </h1>
+            </div>
           </div>
 
-          <h1 className="text-white font-bold text-xl mb-1">
-            Detail Check In & Out
-          </h1>
-
-          {/* Employee row */}
-          <div className="flex items-center gap-3 mt-3">
-            <div className="w-12 h-12 rounded-xl bg-[#b8d9f0] border-2 border-white overflow-hidden shadow-sm shrink-0">
-              <img
-                src="/default-face-scan.jpg"
-                alt={currentEmployee.name}
-                className="w-full h-full object-cover"
-              />
+          {/* Employee Info Card Header */}
+          <div className="flex items-center gap-3.5 mt-3 relative z-10">
+            <div className="w-14 h-14 rounded-2xl bg-[#d8e5ee] border-2 border-white overflow-hidden shadow-sm shrink-0 flex items-center justify-center">
+              <svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
+                <circle cx="32" cy="24" r="11" fill="#475569" />
+                <path
+                  d="M14 56C14 45 22 41 32 41C42 41 50 45 50 56"
+                  fill="#475569"
+                />
+              </svg>
             </div>
-            <div>
-              <p className="text-white font-bold">{currentEmployee.name}</p>
-              <p className="text-blue-100 text-xs">{currentEmployee.division}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-black text-[18px] leading-tight truncate tracking-tight">
+                {currentEmployee.name}
+              </p>
+              <p className="text-blue-100 text-[12.5px] font-medium mt-0.5 truncate">
+                Divisi : {currentEmployee.division}
+              </p>
+              {/* Total Jam Kerja & Istirahat */}
+              <div className="mt-1.5 flex flex-col items-start gap-1">
+                <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-white/25 shadow-2xs">
+                  <Clock size={12} className="text-emerald-300" strokeWidth={2.5} />
+                  <span className="text-[11px] text-white/95 font-medium whitespace-nowrap">
+                    Total Jam Kerja: <strong className="font-bold text-white">{totalWorkHours}</strong>
+                  </span>
+                </div>
+
+                <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-white/25 shadow-2xs">
+                  <Coffee size={12} className="text-amber-300" strokeWidth={2.5} />
+                  <span className="text-[11px] text-white/95 font-medium whitespace-nowrap">
+                    Istirahat: <strong className="font-bold text-white">{breakTimeDisplay}</strong>
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Curved bottom edge */}
+        {/* Curved bottom edge (Ditimpa dengan yang putih/terang seperti sebelumnya) */}
         <div className="h-5 bg-[#ddeef8] rounded-t-3xl" />
       </div>
 
@@ -371,7 +495,7 @@ export default function AbsensiDetailPage() {
                   {
                     icon: <Calendar size={14} />,
                     label: "Tanggal",
-                    value: rec.dayLabel,
+                    value: isTodayRecord ? (savedData?.dateStr || todayDateDetail) : rec.dayLabel,
                     color: "text-[#3b9edd]",
                   },
                   {
@@ -379,6 +503,12 @@ export default function AbsensiDetailPage() {
                     label: "Jam Masuk",
                     value: `${checkInTime} WIB`,
                     color: "text-emerald-500",
+                  },
+                  {
+                    icon: <Coffee size={14} />,
+                    label: "Jam Istirahat",
+                    value: `${breakTimeDisplay} WIB`,
+                    color: "text-amber-500",
                   },
                   {
                     icon: <MapPin size={14} />,
@@ -409,7 +539,7 @@ export default function AbsensiDetailPage() {
                   {
                     icon: <Calendar size={14} />,
                     label: "Tanggal",
-                    value: rec.dayLabel,
+                    value: isTodayRecord ? (savedData?.dateStr || todayDateDetail) : rec.dayLabel,
                     color: "text-[#3b9edd]",
                   },
                   {
@@ -417,6 +547,12 @@ export default function AbsensiDetailPage() {
                     label: "Jam Keluar",
                     value: `${checkOutTime} WIB`,
                     color: "text-rose-500",
+                  },
+                  {
+                    icon: <Coffee size={14} />,
+                    label: "Jam Istirahat",
+                    value: `${breakTimeDisplay} WIB`,
+                    color: "text-amber-500",
                   },
                   {
                     icon: <MapPin size={14} />,

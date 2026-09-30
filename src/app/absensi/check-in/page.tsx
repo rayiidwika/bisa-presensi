@@ -36,21 +36,21 @@ function CheckInContent() {
   const isBreak = isBreakStart || isBreakEnd;
 
   const getPageTitle = () => {
-    if (isBreakEnd) return "Clock Out Istirahat";
+    if (isBreakEnd) return "Selesai Istirahat";
     if (isBreakStart) return "Clock In Istirahat";
     if (isCheckOut) return "Clock Out";
     return "Clock In";
   };
 
   const getActionName = () => {
-    if (isBreakEnd) return "Selesai Istirahat (Clock Out Istirahat)";
+    if (isBreakEnd) return "Selesai Istirahat";
     if (isBreakStart) return "Mulai Istirahat (Clock In Istirahat)";
     if (isCheckOut) return "Absen Keluar (Clock Out)";
     return "Absen Masuk (Clock In)";
   };
 
   const getButtonText = () => {
-    if (isBreakEnd) return "Clock Out Istirahat";
+    if (isBreakEnd) return "Selesai Istirahat";
     if (isBreakStart) return "Clock In Istirahat";
     if (isCheckOut) return "Clock Out";
     return "Clock In";
@@ -544,9 +544,19 @@ function CheckInContent() {
 
     if (isBreakEnd) {
       currentData.breakEnd = recordedTime;
+      try {
+        localStorage.setItem("bisa_attendance_break_end", recordedTime);
+      } catch (err) {
+        console.warn("Storage quota warning", err);
+      }
     } else if (isBreakStart) {
       currentData.breakStart = recordedTime;
       currentData.break = recordedTime;
+      try {
+        localStorage.setItem("bisa_attendance_break_start", recordedTime);
+      } catch (err) {
+        console.warn("Storage quota warning", err);
+      }
     } else if (isCheckOut) {
       currentData.checkOut = recordedTime;
       currentData.checkOutLocation = effectiveLocation;
@@ -609,7 +619,7 @@ function CheckInContent() {
       icon: "success",
       iconColor: "#22c55e",
       title: isBreakEnd
-        ? "Clock Out Istirahat Berhasil!"
+        ? "Selesai Istirahat Berhasil!"
         : isBreakStart
         ? "Clock In Istirahat Berhasil!"
         : isCheckOut
@@ -662,7 +672,7 @@ function CheckInContent() {
   const currentLng = coords?.lng ?? TASIK_LNG;
 
   return (
-    <div className="min-h-screen bg-[#060c14] flex flex-col relative overflow-hidden select-none">
+    <div className="min-h-screen bg-[#156bb8] flex flex-col relative overflow-hidden select-none">
       {/* Hidden canvas for taking snapshot */}
       <canvas ref={canvasRef} className="hidden" />
 
@@ -898,20 +908,21 @@ function CheckInContent() {
 
       {/* ══════════════ TAHAP 2: PREVIEW + BLUE BOTTOM SHEET RESPONSIVE ══════════════ */}
       {stage === "preview" && (
-        <div className="min-h-screen bg-gradient-to-b from-[#2a8ee4] via-[#1f7cd0] to-[#156bb8] flex flex-col items-center relative z-10 overflow-x-hidden">
-          {/* Watermark Logo Bisa Media Putih Blur di ujung kanan */}
-          <div className="absolute -right-6 -top-4 w-60 h-60 pointer-events-none opacity-20 filter blur-[0.8px] rotate-[-6deg] select-none">
-            <img
-              src="/bisa-media-white.png"
-              alt="Watermark BISA MEDIA"
-              className="w-full h-full object-contain"
-            />
-          </div>
+        <div className="fixed inset-0 z-50 bg-[#156bb8] flex flex-col items-center overflow-y-auto select-none">
+          <div className="w-full min-h-screen bg-gradient-to-b from-[#2a8ee4] via-[#1f7cd0] to-[#156bb8] flex flex-col items-center relative overflow-x-hidden">
+            {/* Watermark Logo Bisa Media Putih Blur di ujung kanan */}
+            <div className="absolute -right-6 -top-4 w-60 h-60 pointer-events-none opacity-20 filter blur-[0.8px] rotate-[-6deg] select-none">
+              <img
+                src="/bisa-media-white.png"
+                alt="Watermark BISA MEDIA"
+                className="w-full h-full object-contain"
+              />
+            </div>
 
-          {/* Responsive Container (HP, Tablet, Laptop) */}
-          <div className="w-full max-w-md md:max-w-xl lg:max-w-2xl flex flex-col min-h-screen justify-between relative z-20">
-            {/* Top Bar */}
-            <div className="pt-4 pb-2 px-4 flex items-center justify-between text-white relative z-20">
+            {/* Responsive Container (HP, Tablet, Laptop) */}
+            <div className="w-full max-w-md md:max-w-xl lg:max-w-2xl flex flex-col min-h-screen justify-between relative z-20">
+              {/* Top Bar */}
+              <div className="pt-4 pb-2 px-4 flex items-center justify-between text-white relative z-20">
               <button
                 onClick={() => setStage("camera")}
                 className="text-white hover:opacity-80 active:scale-90 transition-transform p-1 -ml-1"
@@ -1198,6 +1209,7 @@ function CheckInContent() {
               </button>
             </div>
           </div>
+        </div>
         </div>
       )}
     </div>

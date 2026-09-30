@@ -126,8 +126,7 @@ export default function LemburPage() {
       {/* ── Extended Floating Action Button (+ Ajukan) ── */}
       <button
         onClick={() => router.push("/lembur/tambah")}
-        className="fixed bottom-20 z-40 px-4 py-2.5 rounded-full bg-gradient-to-r from-[#1a7dc4] to-[#156bb8] text-white shadow-lg shadow-[#156bb8]/35 flex items-center gap-1.5 hover:brightness-105 active:scale-95 transition-all cursor-pointer font-bold italic text-[13.5px] tracking-wide"
-        style={{ right: "calc(50% - 200px + 16px)" }}
+        className="fixed bottom-[104px] z-40 px-4 py-2.5 rounded-full bg-gradient-to-r from-[#1a7dc4] to-[#156bb8] text-white shadow-lg shadow-[#156bb8]/35 flex items-center gap-1.5 hover:brightness-105 active:scale-95 transition-all cursor-pointer font-bold italic text-[13.5px] tracking-wide right-5 md:right-[calc(50%-21rem+1.25rem)] lg:right-[calc(50%-24rem+1.25rem)] xl:right-[calc(50%-28rem+1.25rem)]"
         aria-label="Ajukan Lembur"
       >
         <Plus size={18} strokeWidth={2.5} />

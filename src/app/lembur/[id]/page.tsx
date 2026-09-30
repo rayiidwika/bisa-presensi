@@ -26,30 +26,48 @@ export default function LemburDetailPage() {
   return (
     <div className="min-h-screen bg-[#ddeef8]">
       {/* Blue header with employee */}
-      <div className="bg-gradient-to-b from-[#3b9edd] to-[#1a6fb5] relative overflow-hidden">
-        <div className="absolute -top-8 -right-8 w-36 h-36 rounded-full bg-white/10" />
+      <div className="bg-gradient-to-b from-[#2a8ee4] via-[#1f7cd0] to-[#156bb8] relative overflow-hidden">
+        {/* Watermark Logo Bisa Media Putih Blur di ujung kanan */}
+        <div className="absolute -right-6 -top-4 w-48 h-48 pointer-events-none opacity-20 filter blur-[0.8px] rotate-[-6deg] select-none">
+          <img
+            src="/bisa-media-white.png"
+            alt="Watermark BISA MEDIA"
+            className="w-full h-full object-contain"
+          />
+        </div>
         <div className="relative px-4 pt-5 pb-6">
           <div className="flex items-center gap-3 mb-4">
-            <button onClick={() => history.back()} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-              <svg width="15" height="15" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" /></svg>
+            <button
+              onClick={() => history.back()}
+              aria-label="Kembali"
+              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 active:scale-95 flex items-center justify-center text-white transition-all backdrop-blur-xs cursor-pointer shrink-0"
+            >
+              <svg width="18" height="18" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" /></svg>
             </button>
-            <p className="text-white text-sm opacity-80">Detail Request</p>
+            <h1 className="text-white font-extrabold text-[17.5px] sm:text-[18.5px] tracking-wide leading-tight truncate">
+              Detail Request Lembur
+            </h1>
           </div>
           {/* Employee */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-14 h-14 rounded-xl bg-[#b8d9f0] border-2 border-white overflow-hidden">
-                <svg viewBox="0 0 80 100" fill="none" className="w-full h-full">
-                  <ellipse cx="40" cy="35" rx="22" ry="24" fill="#1a6fb5" opacity="0.7"/>
-                  <ellipse cx="40" cy="95" rx="38" ry="30" fill="#1a6fb5" opacity="0.6"/>
+          <div className="flex items-center justify-between gap-3.5 mt-3 relative z-10">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-13 h-13 rounded-2xl bg-[#d8e5ee] border-2 border-white overflow-hidden shadow-sm shrink-0 flex items-center justify-center">
+                <svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
+                  <circle cx="32" cy="24" r="11" fill="#475569" />
+                  <path
+                    d="M14 56C14 45 22 41 32 41C42 41 50 45 50 56"
+                    fill="#475569"
+                  />
                 </svg>
               </div>
-              <div>
-                <p className="text-white font-bold text-base">{currentEmployee.name}</p>
-                <p className="text-blue-100 text-xs">{currentEmployee.division} – {currentEmployee.position}</p>
+              <div className="min-w-0">
+                <p className="text-white font-black text-[17px] leading-tight truncate tracking-tight">{currentEmployee.name}</p>
+                <p className="text-blue-100 text-[12.5px] font-medium mt-0.5 truncate">Divisi : {currentEmployee.division}</p>
               </div>
             </div>
-            <StatusBadge status={req.status} />
+            <div className="shrink-0">
+              <StatusBadge status={req.status} />
+            </div>
           </div>
         </div>
         <div className="h-5 bg-[#ddeef8] rounded-t-3xl" />
