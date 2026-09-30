@@ -65,6 +65,7 @@ function CheckInContent() {
   const streamRef = useRef<MediaStream | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isStartingCamera, setIsStartingCamera] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
@@ -234,7 +235,25 @@ function CheckInContent() {
     fetchLocation();
   }, [fetchLocation]);
 
-  // Start Realtime Camera with Progressive Multi-Device Fallback (Mobile, Tablet, Laptop)
+  // Reset stage & states when url searchParam type changes (Clock In, Clock Out, Istirahat)
+  useEffect(() => {
+    setStage("camera");
+    setCapturedImage(null);
+    setIsFaceAligned(false);
+    setIsVideoPlaying(false);
+  }, [typeParam]);
+
+  // Clean up stream tracks on component unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
+
+  // Start Realtime Camera with Progressive Multi-Device Fallback (Mobile HP, Tablet, Laptop)
   const startCamera = useCallback(async () => {
     setIsStartingCamera(true);
     setCameraError(null);
@@ -255,18 +274,26 @@ function CheckInContent() {
       return;
     }
 
-    // Progressive constraints: coba portrait ideal -> standard user camera -> generic camera
+    // Progressive constraints: coba portrait mobile ideal -> standard user camera -> generic camera
     const candidateConstraints: MediaStreamConstraints[] = [
       {
         video: {
-          facingMode: "user",
-          width: { ideal: 720 },
-          height: { ideal: 1280 },
+          facingMode: { ideal: "user" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
         audio: false,
       },
       {
-        video: { facingMode: "user" },
+        video: {
+          facingMode: "user",
+        },
+        audio: false,
+      },
+      {
+        video: {
+          facingMode: { ideal: "user" },
+        },
         audio: false,
       },
       {
@@ -290,6 +317,8 @@ function CheckInContent() {
     if (activeStream) {
       streamRef.current = activeStream;
       setStream(activeStream);
+      setCameraError(null);
+
       if (videoRef.current) {
         const video = videoRef.current;
         video.srcObject = activeStream;
@@ -298,6 +327,7 @@ function CheckInContent() {
         video.muted = true;
         try {
           await video.play();
+          setIsVideoPlaying(true);
         } catch (playErr) {
           console.warn("Video auto-play blocked, waiting for interaction:", playErr);
         }
@@ -305,42 +335,81 @@ function CheckInContent() {
       setIsStartingCamera(false);
     } else {
       setIsStartingCamera(false);
+      setIsVideoPlaying(false);
       console.warn("Camera access failed:", lastError?.message || lastError);
       setCameraError(
         lastError?.name === "NotAllowedError" || lastError?.name === "PermissionDeniedError"
-          ? "Izin kamera belum diaktifkan. Silakan berikan izin akses kamera pada browser Anda."
-          : "Kamera tidak merespons. Tekan 'Aktifkan Kamera' untuk mencoba lagi."
+          ? "Izin kamera belum aktif. Silakan izinkan akses kamera di browser Anda."
+          : "Kamera tidak dapat diakses langsung. Tekan 'Aktifkan Kamera' untuk memulai."
       );
     }
   }, []);
 
+  // Ensure video element plays stream as soon as stream or video element becomes available
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      const video = videoRef.current;
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
+      }
+      video.setAttribute("playsinline", "true");
+      video.setAttribute("webkit-playsinline", "true");
+      video.muted = true;
+      video
+        .play()
+        .then(() => setIsVideoPlaying(true))
+        .catch((err) => console.warn("Video playback promise:", err));
+    }
+  }, [stream]);
+
+  // Stage camera lifecycle
   useEffect(() => {
     if (stage === "camera") {
       startCamera();
-      setIsFaceAligned(false);
-
-      // Facial detection timer: validates face alignment after user is in frame
-      const scanTimer = setTimeout(() => {
-        setIsFaceAligned(true);
-      }, 1500);
-
-      return () => clearTimeout(scanTimer);
     } else {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
       setStream(null);
+      setIsVideoPlaying(false);
     }
   }, [stage, startCamera]);
 
+  // Facial detection alignment: Only activate when video is ACTUALLY streaming frames
+  useEffect(() => {
+    if (stage === "camera" && isVideoPlaying) {
+      const scanTimer = setTimeout(() => {
+        setIsFaceAligned(true);
+      }, 1200);
+      return () => clearTimeout(scanTimer);
+    } else {
+      setIsFaceAligned(false);
+    }
+  }, [stage, isVideoPlaying]);
+
   // Capture Photo with Proportional Center-Cover Crop (Anti-Gepeng di Laptop, Tab, dan HP)
   const handleCapture = () => {
+    if (!isVideoPlaying || !stream || !videoRef.current || videoRef.current.videoWidth === 0) {
+      Swal.fire({
+        icon: "warning",
+        title: "Kamera Belum Aktif",
+        text: "Kamera belum menyala atau belum diizinkan. Silakan aktifkan kamera terlebih dahulu sebelum mengambil foto.",
+        confirmButtonColor: "#156bb8",
+        confirmButtonText: "Aktifkan Kamera",
+      }).then((result) => {
+        if (result.isConfirmed) {
+          startCamera();
+        }
+      });
+      return;
+    }
+
     if (!isFaceAligned) {
       Swal.fire({
         icon: "warning",
-        title: "Wajah Belum Terdeteksi",
-        text: "Posisikan wajah Anda tepat di dalam area oval hingga terdeteksi sebelum mengambil foto.",
+        title: "Posisikan Wajah",
+        text: "Posisikan wajah Anda tepat di dalam area panduan oval hingga terdeteksi.",
         confirmButtonColor: "#156bb8",
         confirmButtonText: "Mengerti",
       });
@@ -400,15 +469,26 @@ function CheckInContent() {
 
         const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
         setCapturedImage(dataUrl);
+        setStage("preview");
       }
-    } else {
-      setCapturedImage(isCheckOut ? "/default-checkout-scan.jpg" : "/default-face-scan.jpg");
     }
-    setStage("preview");
   };
 
   // Submit Absensi -> Check Radius -> Save to localStorage -> Pop-up SweetAlert2 with green checkmark & button "Keluar" -> Redirect to Home
   const handleConfirmAbsensi = async () => {
+    // Validasi foto presensi harus ada
+    if (!capturedImage) {
+      Swal.fire({
+        icon: "warning",
+        title: "Foto Presensi Wajib Diambil",
+        text: "Silakan ambil foto selfie menggunakan kamera terlebih dahulu sebelum melakukan presensi.",
+        confirmButtonColor: "#156bb8",
+        confirmButtonText: "Buka Kamera",
+      });
+      setStage("camera");
+      return;
+    }
+
     // Validasi radius 100 meter
     if (distanceMeters > RADIUS_LIMIT) {
       const confirmOut = await Swal.fire({
@@ -591,47 +671,69 @@ function CheckInContent() {
         <div className="fixed inset-0 z-50 bg-[#060c14] flex items-center justify-center overflow-hidden">
           {/* Kamera Frame: Fullscreen di HP, Floating Kiosk Panel di Tablet & Laptop */}
           <div className="w-full h-full max-w-md md:max-w-xl md:h-[94vh] md:rounded-3xl md:border md:border-white/20 md:shadow-[0_0_60px_rgba(0,0,0,0.85)] overflow-hidden relative flex flex-col justify-between bg-black">
-            {/* ── 1. Realtime Video Feed ── */}
-            {stream ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                onLoadedMetadata={async () => {
-                  try {
-                    await videoRef.current?.play();
-                  } catch (e) {
-                    console.warn("Autoplay fallback:", e);
-                  }
-                }}
-                className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
-              />
-            ) : (
-              /* Fallback & Manual Trigger Viewfinder */
-              <div className="absolute inset-0 w-full h-full bg-[#0a1828] flex flex-col items-center justify-center p-6 text-center z-10">
-                <div className="w-48 h-64 rounded-full bg-slate-800/80 flex items-center justify-center overflow-hidden border border-slate-700 shadow-xl mb-4">
-                  <svg viewBox="0 0 64 64" fill="none" className="w-40 h-40 mt-8">
-                    <circle cx="32" cy="22" r="14" fill="#64748b" />
-                    <path
-                      d="M10 58C10 44 20 38 32 38C44 38 54 44 54 58"
-                      fill="#64748b"
-                    />
-                  </svg>
+            {/* ── 1. Realtime Video Feed (Always Mounted to prevent blank screen) ── */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              onPlaying={() => {
+                setIsVideoPlaying(true);
+                setCameraError(null);
+              }}
+              onLoadedMetadata={async () => {
+                try {
+                  await videoRef.current?.play();
+                  setIsVideoPlaying(true);
+                } catch (e) {
+                  console.warn("Autoplay error:", e);
+                }
+              }}
+              className={`absolute inset-0 w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${
+                isVideoPlaying ? "opacity-100" : "opacity-0"
+              }`}
+            />
+
+            {/* Fallback / Loading / Permission Request Overlay */}
+            {!isVideoPlaying && (
+              <div className="absolute inset-0 w-full h-full bg-[#071320] flex flex-col items-center justify-center p-6 text-center z-10">
+                <div className="w-48 h-60 rounded-[50%/60%] bg-slate-800/80 flex flex-col items-center justify-center overflow-hidden border border-slate-700 shadow-2xl mb-5 relative">
+                  {isStartingCamera ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 rounded-full border-3 border-blue-500 border-t-transparent animate-spin" />
+                      <span className="text-white text-xs font-semibold">Menyalakan Kamera...</span>
+                    </div>
+                  ) : (
+                    <svg viewBox="0 0 64 64" fill="none" className="w-36 h-36 mt-4 opacity-50">
+                      <circle cx="32" cy="22" r="14" fill="#64748b" />
+                      <path
+                        d="M10 58C10 44 20 38 32 38C44 38 54 44 54 58"
+                        fill="#64748b"
+                      />
+                    </svg>
+                  )}
                 </div>
+
                 <button
-                  onClick={startCamera}
+                  type="button"
+                  onClick={() => startCamera()}
                   disabled={isStartingCamera}
-                  className="bg-[#156bb8] hover:bg-[#1f7cd0] active:scale-95 text-white font-bold text-xs px-5 py-2.5 rounded-full shadow-lg flex items-center gap-2 transition-all cursor-pointer"
+                  className="bg-[#156bb8] hover:bg-[#1f7cd0] active:scale-95 text-white font-bold text-xs px-6 py-3 rounded-full shadow-lg flex items-center gap-2 transition-all cursor-pointer z-20"
                 >
-                  <Camera size={16} />
+                  <Camera size={18} />
                   <span>
                     {isStartingCamera ? "Menghubungkan Kamera..." : "Aktifkan Kamera"}
                   </span>
                 </button>
-                {cameraError && (
-                  <p className="text-[11px] text-white/80 font-medium mt-3 bg-black/60 px-4 py-1.5 rounded-full backdrop-blur-sm max-w-xs">
-                    {cameraError}
+
+                {cameraError ? (
+                  <div className="mt-4 bg-red-950/80 border border-red-500/40 text-red-200 text-[11.5px] px-4 py-2.5 rounded-xl max-w-xs">
+                    <p className="font-semibold mb-0.5">Akses Kamera Diperlukan</p>
+                    <p>{cameraError}</p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-white/70 font-medium mt-3 max-w-xs">
+                    Izinkan akses kamera di browser Anda untuk melakukan absensi
                   </p>
                 )}
               </div>
@@ -704,12 +806,19 @@ function CheckInContent() {
                 {/* Status pill badge inside */}
                 <div
                   className={`absolute -bottom-10 backdrop-blur-md text-white text-[11.5px] font-semibold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 transition-colors ${
-                    isFaceAligned
+                    !isVideoPlaying
+                      ? "bg-slate-900/90 border border-slate-600/50"
+                      : isFaceAligned
                       ? "bg-emerald-950/85 border border-emerald-500/50"
                       : "bg-amber-950/85 border border-amber-500/50"
                   }`}
                 >
-                  {isFaceAligned ? (
+                  {!isVideoPlaying ? (
+                    <>
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-400 animate-pulse" />
+                      <span>{isStartingCamera ? "Menghubungkan Kamera..." : "Kamera Belum Aktif"}</span>
+                    </>
+                  ) : isFaceAligned ? (
                     <>
                       <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-ping" />
                       <span>Wajah Terdeteksi ✓ (Siap Absen)</span>
@@ -752,11 +861,12 @@ function CheckInContent() {
                 {/* Circular Shutter Button */}
                 <button
                   onClick={handleCapture}
+                  disabled={!isVideoPlaying}
                   aria-label={`Ambil Foto ${getPageTitle()}`}
                   className={`w-18 h-18 rounded-full border-[4px] border-white shadow-2xl flex items-center justify-center transition-all cursor-pointer ${
-                    isFaceAligned
+                    isVideoPlaying && isFaceAligned
                       ? "bg-[#156bb8] ring-4 ring-[#156bb8]/40 active:scale-90"
-                      : "bg-slate-500 ring-4 ring-slate-400/50 opacity-80"
+                      : "bg-slate-600 ring-4 ring-slate-500/30 opacity-70 cursor-not-allowed"
                   }`}
                 >
                   <div className="w-7 h-7 rounded-full bg-white shadow-inner" />
