@@ -57,7 +57,7 @@ export default function PengajuanDetailPage() {
         <div className="h-5 bg-[#ddeef8] rounded-t-3xl" />
       </div>
 
-      <div className="px-4 -mt-1 pb-6 space-y-3 animate-fade-in">
+      <div className="px-4 -mt-1 pb-24 space-y-3 animate-fade-in">
         {/* Main data */}
         <div className="bg-white rounded-2xl border border-[#c8e0f0] shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-50">

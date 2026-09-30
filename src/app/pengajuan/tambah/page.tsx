@@ -93,7 +93,7 @@ export default function TambahPengajuanPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="px-4 pt-4 pb-8 space-y-4 animate-fade-in">
+      <form onSubmit={handleSubmit} className="px-4 pt-4 pb-24 space-y-4 animate-fade-in">
         <div className="bg-white rounded-2xl border border-[#c8e0f0] shadow-sm p-4 space-y-4">
           {/* Type */}
           <Field label="Type" error={errors.type}>

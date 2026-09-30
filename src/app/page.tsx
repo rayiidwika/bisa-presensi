@@ -89,6 +89,14 @@ export default function HomePage() {
     setPastRekapDays(past);
 
     const syncAttendance = () => {
+      let inTime =
+        typeof window !== "undefined"
+          ? localStorage.getItem("bisa_attendance_checkin_time")
+          : null;
+      let outTime =
+        typeof window !== "undefined"
+          ? localStorage.getItem("bisa_attendance_checkout_time")
+          : null;
       let inN =
         (typeof window !== "undefined" &&
           localStorage.getItem("bisa_attendance_checkin_notes")) ||
@@ -98,12 +106,15 @@ export default function HomePage() {
           localStorage.getItem("bisa_attendance_checkout_notes")) ||
         "";
 
-      const saved = localStorage.getItem("bisa_attendance_today");
+      const saved =
+        typeof window !== "undefined"
+          ? localStorage.getItem("bisa_attendance_today")
+          : null;
       if (saved) {
         try {
           const data = JSON.parse(saved);
-          if (data.checkIn) setCheckInTime(data.checkIn);
-          if (data.checkOut) setCheckOutTime(data.checkOut);
+          if (data.checkIn) inTime = data.checkIn;
+          if (data.checkOut) outTime = data.checkOut;
           if (data.breakStart || data.break)
             setBreakStartTime(data.breakStart || data.break);
           if (data.breakEnd) setBreakEndTime(data.breakEnd);
@@ -113,12 +124,20 @@ export default function HomePage() {
           console.error(e);
         }
       }
+
+      setCheckInTime(inTime || "-- : --");
+      setCheckOutTime(outTime || "-- : --");
       setCheckInNotes(inN);
       setCheckOutNotes(outN);
     };
+
     syncAttendance();
     window.addEventListener("focus", syncAttendance);
-    return () => window.removeEventListener("focus", syncAttendance);
+    window.addEventListener("storage", syncAttendance);
+    return () => {
+      window.removeEventListener("focus", syncAttendance);
+      window.removeEventListener("storage", syncAttendance);
+    };
   }, []);
 
   const handleIstirahatClick = () => {
@@ -177,13 +196,27 @@ export default function HomePage() {
     ...pastRekapDays,
   ];
 
+  const hasCheckedIn = Boolean(
+    checkInTime &&
+    checkInTime !== "-- : --" &&
+    checkInTime !== "--:--" &&
+    checkInTime !== "-"
+  );
+
+  const hasCheckedOut = Boolean(
+    checkOutTime &&
+    checkOutTime !== "-- : --" &&
+    checkOutTime !== "--:--" &&
+    checkOutTime !== "-"
+  );
+
   // Perhitungan Total Jam Kerja Hari Ini:
   // - Jam masuk kantor: 08:00 (jika absen lebih awal, mulai dihitung 08:00; jika terlambat misal 08:01, dihitung 08:01)
   // - Istirahat: 12:00 - 13:00 (1 jam tidak dihitung kerja)
   // - Jam pulang kantor standar: 17:00 (jika clock out lebih dari jam 17:00, tetap dihitung maksimal sampai jam 17:00)
   // - Format: {jam} Jam {menit} Menit (contoh: 8 Jam 0 Menit, atau 7 Jam 59 Menit jika masuk 08:01; 0 Jam 0 Menit jika belum absen)
   const calculateTotalWorkHours = (inStr?: string | null, outStr?: string | null): string => {
-    if (!inStr) return "0 Jam 0 Menit";
+    if (!hasCheckedIn || !inStr || inStr === "-- : --" || inStr === "--:--") return "0 Jam 0 Menit";
 
     const parseToMinutes = (str: string): number | null => {
       const match = str.trim().match(/(\d{1,2})[:.](\d{2})(?:\s*([AP]M))?/i);
@@ -199,7 +232,7 @@ export default function HomePage() {
     const inMin = parseToMinutes(inStr);
     if (inMin === null) return "0 Jam 0 Menit";
 
-    const outMin = outStr ? parseToMinutes(outStr) : 1020;
+    const outMin = hasCheckedOut && outStr ? parseToMinutes(outStr) : 1020;
     if (outMin === null) return "8 Jam 0 Menit";
 
     // Maksimal clock out dihitung sampai jam 17:00 (1020 menit)
@@ -227,7 +260,7 @@ export default function HomePage() {
   const totalWorkHoursToday = calculateTotalWorkHours(checkInTime, checkOutTime);
 
   return (
-    <div className="min-h-screen bg-[#edf6fc] pb-10">
+    <div className="min-h-screen bg-[#ddeef8] pb-24">
       {/* ══════════════ BLUE GRADIENT HEADER WITH WATERMARK ══════════════ */}
       <div className="bg-gradient-to-b from-[#2a8ee4] via-[#1f7cd0] to-[#156bb8] pt-4 pb-6 px-4 relative overflow-hidden rounded-b-[32px] shadow-sm">
         {/* Watermark Logo Bisa Media Putih Blur di ujung kanan */}
@@ -277,12 +310,12 @@ export default function HomePage() {
             Hallo Setiawan
           </h1>
           <div className="text-white/90 text-[11.5px] font-medium tracking-normal mt-1 leading-snug transition-all">
-            {!checkInTime ? (
+            {!hasCheckedIn ? (
               <>
                 <p>Pagi! Jangan lupa absen dulu ya,</p>
-                <p>semoga harimu senin trus ✨</p>
+                <p>semoga harimu menyenangkan ✨</p>
               </>
-            ) : !checkOutTime ? (
+            ) : !hasCheckedOut ? (
               <>
                 <p>Absen masuk beres! Semangat ya,</p>
                 <p>kamu pasti bisa lewatin hari ini 💪</p>

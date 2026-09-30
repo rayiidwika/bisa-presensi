@@ -31,7 +31,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-200`}
       >
         {/* Responsive Container for Mobile, Tablet, and Laptop */}
-        <div className="min-h-screen w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl mx-auto bg-slate-50 relative pb-24 shadow-2xl overflow-x-hidden transition-all duration-300">
+        <div className="min-h-screen w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl mx-auto bg-[#ddeef8] relative shadow-2xl overflow-x-hidden transition-all duration-300">
           {children}
           <BottomNav />
         </div>

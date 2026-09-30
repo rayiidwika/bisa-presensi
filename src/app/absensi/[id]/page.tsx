@@ -241,7 +241,7 @@ export default function AbsensiDetailPage() {
   const totalWorkHours = calculateTotalWorkHours(checkInTime, checkOutTime);
 
   return (
-    <div className="min-h-screen bg-[#ddeef8] pb-10">
+    <div className="min-h-screen bg-[#ddeef8] pb-24">
       {/* ══════════════ BLUE GRADIENT HEADER WITH WATERMARK ══════════════ */}
       <div className="bg-gradient-to-b from-[#2a8ee4] via-[#1f7cd0] to-[#156bb8] relative overflow-hidden">
         {/* Watermark Logo Bisa Media Putih Blur di ujung kanan */}

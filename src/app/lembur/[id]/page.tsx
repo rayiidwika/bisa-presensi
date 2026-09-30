@@ -73,7 +73,7 @@ export default function LemburDetailPage() {
         <div className="h-5 bg-[#ddeef8] rounded-t-3xl" />
       </div>
 
-      <div className="px-4 -mt-1 pb-6 space-y-3 animate-fade-in">
+      <div className="px-4 -mt-1 pb-24 space-y-3 animate-fade-in">
         {/* Tab switcher */}
         <div className="bg-white rounded-2xl border border-[#c8e0f0] shadow-sm p-1.5 flex gap-1">
           {[
