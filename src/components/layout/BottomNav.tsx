@@ -15,7 +15,7 @@ export default function BottomNav() {
   if (isCheckIn) return null;
 
   return (
-    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50 select-none">
+    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl z-50 select-none transition-all duration-300">
       <div className="bg-white/95 backdrop-blur-xl border-t border-slate-200/80 shadow-[0_-4px_25px_rgba(0,0,0,0.06)] px-4 pb-safe">
         <div className="flex items-center justify-between h-16 relative">
           {/* ══════════════ TAB 1: PENGAJUAN (KIRI) ══════════════ */}

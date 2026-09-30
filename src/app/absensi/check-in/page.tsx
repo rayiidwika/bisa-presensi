@@ -62,7 +62,9 @@ function CheckInContent() {
   // Camera & Image state
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isStartingCamera, setIsStartingCamera] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
@@ -232,30 +234,85 @@ function CheckInContent() {
     fetchLocation();
   }, [fetchLocation]);
 
-  // Start Realtime Camera
+  // Start Realtime Camera with Progressive Multi-Device Fallback (Mobile, Tablet, Laptop)
   const startCamera = useCallback(async () => {
-    try {
-      setCameraError(null);
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-      const newStream = await navigator.mediaDevices.getUserMedia({
+    setIsStartingCamera(true);
+    setCameraError(null);
+
+    // Stop active stream tracks if any
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      !navigator.mediaDevices.getUserMedia
+    ) {
+      setCameraError("Perangkat atau browser ini tidak mendukung akses kamera langsung.");
+      setIsStartingCamera(false);
+      return;
+    }
+
+    // Progressive constraints: coba portrait ideal -> standard user camera -> generic camera
+    const candidateConstraints: MediaStreamConstraints[] = [
+      {
         video: {
           facingMode: "user",
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
+          width: { ideal: 720 },
+          height: { ideal: 1280 },
         },
         audio: false,
-      });
-      setStream(newStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = newStream;
+      },
+      {
+        video: { facingMode: "user" },
+        audio: false,
+      },
+      {
+        video: true,
+        audio: false,
+      },
+    ];
+
+    let activeStream: MediaStream | null = null;
+    let lastError: any = null;
+
+    for (const constraint of candidateConstraints) {
+      try {
+        activeStream = await navigator.mediaDevices.getUserMedia(constraint);
+        if (activeStream) break;
+      } catch (err: any) {
+        lastError = err;
       }
-    } catch (err: any) {
-      console.warn("Camera access error:", err?.message || err);
-      setCameraError("Kamera simulasi aktif (Izin akses belum tersedia)");
     }
-  }, [stream]);
+
+    if (activeStream) {
+      streamRef.current = activeStream;
+      setStream(activeStream);
+      if (videoRef.current) {
+        const video = videoRef.current;
+        video.srcObject = activeStream;
+        video.setAttribute("playsinline", "true");
+        video.setAttribute("webkit-playsinline", "true");
+        video.muted = true;
+        try {
+          await video.play();
+        } catch (playErr) {
+          console.warn("Video auto-play blocked, waiting for interaction:", playErr);
+        }
+      }
+      setIsStartingCamera(false);
+    } else {
+      setIsStartingCamera(false);
+      console.warn("Camera access failed:", lastError?.message || lastError);
+      setCameraError(
+        lastError?.name === "NotAllowedError" || lastError?.name === "PermissionDeniedError"
+          ? "Izin kamera belum diaktifkan. Silakan berikan izin akses kamera pada browser Anda."
+          : "Kamera tidak merespons. Tekan 'Aktifkan Kamera' untuk mencoba lagi."
+      );
+    }
+  }, []);
 
   useEffect(() => {
     if (stage === "camera") {
@@ -269,13 +326,15 @@ function CheckInContent() {
 
       return () => clearTimeout(scanTimer);
     } else {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
       }
+      setStream(null);
     }
-  }, [stage]);
+  }, [stage, startCamera]);
 
-  // Capture Photo with facial alignment validation
+  // Capture Photo with Proportional Center-Cover Crop (Anti-Gepeng di Laptop, Tab, dan HP)
   const handleCapture = () => {
     if (!isFaceAligned) {
       Swal.fire({
@@ -288,20 +347,58 @@ function CheckInContent() {
       return;
     }
 
-    if (videoRef.current && canvasRef.current && stream) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      // Gunakan resolusi optimal mobile yang tajam tapi hemat memori (480x640)
-      const targetWidth = 480;
-      const targetHeight = 640;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    if (video && canvas && (stream || streamRef.current)) {
+      const vw = video.videoWidth || 640;
+      const vh = video.videoHeight || 480;
+
+      // Target standar portrait 3:4 (720x960) yang tajam & proporsional
+      const targetWidth = 720;
+      const targetHeight = 960;
       canvas.width = targetWidth;
       canvas.height = targetHeight;
+
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1); // mirror selfie
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+        const videoRatio = vw / vh;
+        const targetRatio = targetWidth / targetHeight; // 0.75
+
+        let sWidth = vw;
+        let sHeight = vh;
+        let sx = 0;
+        let sy = 0;
+
+        // Hitung crop tengah secara presisi (mencegah foto gepeng / stretch)
+        if (videoRatio > targetRatio) {
+          // Video lebih lebar (laptop 16:9 / tablet landscape) -> crop sisi kiri dan kanan
+          sWidth = vh * targetRatio;
+          sx = (vw - sWidth) / 2;
+        } else {
+          // Video lebih tinggi (HP layar panjang) -> crop sisi atas dan bawah
+          sHeight = vw / targetRatio;
+          sy = (vh - sHeight) / 2;
+        }
+
+        ctx.save();
+        // Mirror horizontal untuk selfie selfie cam
+        ctx.translate(targetWidth, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(
+          video,
+          sx,
+          sy,
+          sWidth,
+          sHeight,
+          0,
+          0,
+          targetWidth,
+          targetHeight
+        );
+        ctx.restore();
+
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
         setCapturedImage(dataUrl);
       }
     } else {
@@ -485,193 +582,213 @@ function CheckInContent() {
   const currentLng = coords?.lng ?? TASIK_LNG;
 
   return (
-    <div className="min-h-screen bg-black flex flex-col relative overflow-hidden select-none">
+    <div className="min-h-screen bg-[#060c14] flex flex-col relative overflow-hidden select-none">
       {/* Hidden canvas for taking snapshot */}
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* ══════════════ TAHAP 1: KAMERA FULL SCREEN + AREA WAJAH ══════════════ */}
+      {/* ══════════════ TAHAP 1: KAMERA RESPONSIVE (HP, TAB, LAPTOP) ══════════════ */}
       {stage === "camera" && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col justify-between overflow-hidden">
-          {/* ── 1. Full Screen Camera Video Feed ── */}
-          {stream ? (
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
-            />
-          ) : (
-            /* Fallback Realistic Viewfinder with Silhouette */
-            <div className="absolute inset-0 w-full h-full bg-[#0a1828] flex flex-col items-center justify-center">
-              <div className="w-56 h-72 rounded-full bg-slate-800/80 flex items-center justify-center overflow-hidden border border-slate-700">
-                <svg viewBox="0 0 64 64" fill="none" className="w-48 h-48 mt-8">
-                  <circle cx="32" cy="22" r="14" fill="#64748b" />
-                  <path
-                    d="M10 58C10 44 20 38 32 38C44 38 54 44 54 58"
-                    fill="#64748b"
-                  />
-                </svg>
+        <div className="fixed inset-0 z-50 bg-[#060c14] flex items-center justify-center overflow-hidden">
+          {/* Kamera Frame: Fullscreen di HP, Floating Kiosk Panel di Tablet & Laptop */}
+          <div className="w-full h-full max-w-md md:max-w-xl md:h-[94vh] md:rounded-3xl md:border md:border-white/20 md:shadow-[0_0_60px_rgba(0,0,0,0.85)] overflow-hidden relative flex flex-col justify-between bg-black">
+            {/* ── 1. Realtime Video Feed ── */}
+            {stream ? (
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                onLoadedMetadata={async () => {
+                  try {
+                    await videoRef.current?.play();
+                  } catch (e) {
+                    console.warn("Autoplay fallback:", e);
+                  }
+                }}
+                className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
+              />
+            ) : (
+              /* Fallback & Manual Trigger Viewfinder */
+              <div className="absolute inset-0 w-full h-full bg-[#0a1828] flex flex-col items-center justify-center p-6 text-center z-10">
+                <div className="w-48 h-64 rounded-full bg-slate-800/80 flex items-center justify-center overflow-hidden border border-slate-700 shadow-xl mb-4">
+                  <svg viewBox="0 0 64 64" fill="none" className="w-40 h-40 mt-8">
+                    <circle cx="32" cy="22" r="14" fill="#64748b" />
+                    <path
+                      d="M10 58C10 44 20 38 32 38C44 38 54 44 54 58"
+                      fill="#64748b"
+                    />
+                  </svg>
+                </div>
+                <button
+                  onClick={startCamera}
+                  disabled={isStartingCamera}
+                  className="bg-[#156bb8] hover:bg-[#1f7cd0] active:scale-95 text-white font-bold text-xs px-5 py-2.5 rounded-full shadow-lg flex items-center gap-2 transition-all cursor-pointer"
+                >
+                  <Camera size={16} />
+                  <span>
+                    {isStartingCamera ? "Menghubungkan Kamera..." : "Aktifkan Kamera"}
+                  </span>
+                </button>
+                {cameraError && (
+                  <p className="text-[11px] text-white/80 font-medium mt-3 bg-black/60 px-4 py-1.5 rounded-full backdrop-blur-sm max-w-xs">
+                    {cameraError}
+                  </p>
+                )}
               </div>
-              {cameraError && (
-                <p className="text-[11px] text-white/80 font-medium mt-4 bg-black/60 px-4 py-1.5 rounded-full backdrop-blur-sm">
-                  {cameraError}
-                </p>
-              )}
-            </div>
-          )}
+            )}
 
-          {/* ── 2. Top Bar (Overlay Translucent) ── */}
-          <div className="relative z-20 pt-5 pb-6 px-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent flex items-center justify-between text-white">
-            <button
-              onClick={() => router.push("/")}
-              aria-label="Kembali"
-              className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 active:scale-90 transition-all"
-            >
-              <ChevronLeft size={24} />
-            </button>
-            <div className="flex items-center gap-2">
-              {isCheckOut || isBreakEnd ? (
-                <div className="w-7 h-7 rounded-full bg-rose-500/20 border border-rose-400/40 flex items-center justify-center text-rose-300">
-                  <LogOut size={15} strokeWidth={2.5} />
-                </div>
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300">
-                  <LogIn size={15} strokeWidth={2.5} />
-                </div>
-              )}
-              <h1 className="text-white font-bold italic text-[19px] tracking-wide drop-shadow-md">
-                {getPageTitle()}
-              </h1>
-            </div>
-            <div className="w-10" />
-          </div>
-
-          {/* ── 3. Center Area Wajah (Face Guide Oval Overlay) ── */}
-          <div className="relative z-20 pointer-events-none flex flex-col items-center justify-center flex-1">
-            <div
-              className={`w-[220px] h-[300px] rounded-[50%/60%] border-2 transition-all duration-500 relative flex items-center justify-center ${
-                isFaceAligned
-                  ? "border-[#22c55e] shadow-[0_0_35px_rgba(34,197,94,0.55)]"
-                  : "border-dashed border-amber-400"
-              }`}
-            >
-              {/* Corner alignment markers */}
-              <div
-                className={`absolute -top-1.5 -left-1.5 w-7 h-7 border-t-4 border-l-4 rounded-tl-lg transition-colors ${
-                  isFaceAligned ? "border-green-500" : "border-amber-400"
-                }`}
-              />
-              <div
-                className={`absolute -top-1.5 -right-1.5 w-7 h-7 border-t-4 border-r-4 rounded-tr-lg transition-colors ${
-                  isFaceAligned ? "border-green-500" : "border-amber-400"
-                }`}
-              />
-              <div
-                className={`absolute -bottom-1.5 -left-1.5 w-7 h-7 border-b-4 border-l-4 rounded-bl-lg transition-colors ${
-                  isFaceAligned ? "border-green-500" : "border-amber-400"
-                }`}
-              />
-              <div
-                className={`absolute -bottom-1.5 -right-1.5 w-7 h-7 border-b-4 border-r-4 rounded-br-lg transition-colors ${
-                  isFaceAligned ? "border-green-500" : "border-amber-400"
-                }`}
-              />
-
-              {/* Animated Horizontal Scan Line */}
-              <div
-                className={`absolute left-4 right-4 h-0.5 bg-gradient-to-r from-transparent ${
-                  isFaceAligned ? "via-green-400" : "via-amber-400"
-                } to-transparent animate-pulse opacity-85`}
-              />
-
-              {/* Status pill badge inside */}
-              <div
-                className={`absolute -bottom-10 backdrop-blur-md text-white text-[11.5px] font-semibold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 transition-colors ${
-                  isFaceAligned
-                    ? "bg-emerald-950/85 border border-emerald-500/50"
-                    : "bg-amber-950/85 border border-amber-500/50"
-                }`}
+            {/* ── 2. Top Bar (Overlay Translucent) ── */}
+            <div className="relative z-20 pt-5 pb-6 px-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent flex items-center justify-between text-white">
+              <button
+                onClick={() => router.push("/")}
+                aria-label="Kembali"
+                className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 active:scale-90 transition-all"
               >
-                {isFaceAligned ? (
-                  <>
-                    <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-ping" />
-                    <span>Wajah Terdeteksi ✓ (Siap Absen)</span>
-                  </>
+                <ChevronLeft size={24} />
+              </button>
+              <div className="flex items-center gap-2">
+                {isCheckOut || isBreakEnd ? (
+                  <div className="w-7 h-7 rounded-full bg-rose-500/20 border border-rose-400/40 flex items-center justify-center text-rose-300">
+                    <LogOut size={15} strokeWidth={2.5} />
+                  </div>
                 ) : (
-                  <>
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
-                    <span>Posisikan Wajah di Area Oval...</span>
-                  </>
+                  <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300">
+                    <LogIn size={15} strokeWidth={2.5} />
+                  </div>
                 )}
+                <h1 className="text-white font-bold italic text-[19px] tracking-wide drop-shadow-md">
+                  {getPageTitle()}
+                </h1>
+              </div>
+              <div className="w-10" />
+            </div>
+
+            {/* ── 3. Center Area Wajah (Face Guide Oval Overlay) ── */}
+            <div className="relative z-20 pointer-events-none flex flex-col items-center justify-center flex-1">
+              <div
+                className={`w-[220px] h-[300px] rounded-[50%/60%] border-2 transition-all duration-500 relative flex items-center justify-center ${
+                  isFaceAligned
+                    ? "border-[#22c55e] shadow-[0_0_35px_rgba(34,197,94,0.55)]"
+                    : "border-dashed border-amber-400"
+                }`}
+              >
+                {/* Corner alignment markers */}
+                <div
+                  className={`absolute -top-1.5 -left-1.5 w-7 h-7 border-t-4 border-l-4 rounded-tl-lg transition-colors ${
+                    isFaceAligned ? "border-green-500" : "border-amber-400"
+                  }`}
+                />
+                <div
+                  className={`absolute -top-1.5 -right-1.5 w-7 h-7 border-t-4 border-r-4 rounded-tr-lg transition-colors ${
+                    isFaceAligned ? "border-green-500" : "border-amber-400"
+                  }`}
+                />
+                <div
+                  className={`absolute -bottom-1.5 -left-1.5 w-7 h-7 border-b-4 border-l-4 rounded-bl-lg transition-colors ${
+                    isFaceAligned ? "border-green-500" : "border-amber-400"
+                  }`}
+                />
+                <div
+                  className={`absolute -bottom-1.5 -right-1.5 w-7 h-7 border-b-4 border-r-4 rounded-br-lg transition-colors ${
+                    isFaceAligned ? "border-green-500" : "border-amber-400"
+                  }`}
+                />
+
+                {/* Animated Horizontal Scan Line */}
+                <div
+                  className={`absolute left-4 right-4 h-0.5 bg-gradient-to-r from-transparent ${
+                    isFaceAligned ? "via-green-400" : "via-amber-400"
+                  } to-transparent animate-pulse opacity-85`}
+                />
+
+                {/* Status pill badge inside */}
+                <div
+                  className={`absolute -bottom-10 backdrop-blur-md text-white text-[11.5px] font-semibold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 transition-colors ${
+                    isFaceAligned
+                      ? "bg-emerald-950/85 border border-emerald-500/50"
+                      : "bg-amber-950/85 border border-amber-500/50"
+                  }`}
+                >
+                  {isFaceAligned ? (
+                    <>
+                      <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-ping" />
+                      <span>Wajah Terdeteksi ✓ (Siap Absen)</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+                      <span>Posisikan Wajah di Area Oval...</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* ── 4. Bottom Controls (Overlay Translucent) ── */}
-          <div className="relative z-20 pb-8 pt-6 px-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex flex-col items-center">
-            {/* Realtime Location Badge with 100m Radius status */}
-            <div className="bg-black/60 backdrop-blur-md border border-white/20 rounded-full py-1.5 px-4 flex items-center gap-2 text-white/90 text-[11px] mb-4 shadow-lg">
-              <MapPin size={13} className="text-emerald-400" />
-              <span className="font-medium truncate max-w-[220px]">
-                {locationName} • {distanceMeters}m (Radius 100m)
-              </span>
-              <button
-                onClick={fetchLocation}
-                disabled={isLocating}
-                className="text-white hover:text-blue-300 ml-1 flex items-center gap-1 active:scale-95"
-              >
-                <RotateCw
-                  size={11}
-                  className={isLocating ? "animate-spin text-blue-400" : ""}
-                />
-                <span>Perbarui</span>
-              </button>
-            </div>
-
-            {/* Shutter Button & Quick Note Action */}
-            <div className="flex items-center justify-center gap-6 w-full max-w-[280px]">
-              <div className="w-11" />
-
-              {/* Circular Shutter Button */}
-              <button
-                onClick={handleCapture}
-                aria-label={`Ambil Foto ${getPageTitle()}`}
-                className={`w-18 h-18 rounded-full border-[4px] border-white shadow-2xl flex items-center justify-center transition-all cursor-pointer ${
-                  isFaceAligned
-                    ? "bg-[#156bb8] ring-4 ring-[#156bb8]/40 active:scale-90"
-                    : "bg-slate-500 ring-4 ring-slate-400/50 opacity-80"
-                }`}
-              >
-                <div className="w-7 h-7 rounded-full bg-white shadow-inner" />
-              </button>
-
-              {/* Quick Note Button */}
-              <button
-                onClick={handleTambahCatatan}
-                aria-label="Tambah Catatan"
-                className={`w-11 h-11 rounded-full border flex flex-col items-center justify-center transition-all active:scale-95 shadow-md relative ${
-                  catatan
-                    ? "bg-[#156bb8] border-white text-white"
-                    : "bg-black/50 border-white/30 text-white/90 hover:bg-black/70"
-                }`}
-              >
-                <MessageSquare size={16} />
-                <span className="text-[7.5px] font-semibold mt-0.5 leading-none">
-                  {catatan ? "Catatan ✓" : "Catatan"}
+            {/* ── 4. Bottom Controls (Overlay Translucent) ── */}
+            <div className="relative z-20 pb-8 pt-6 px-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex flex-col items-center">
+              {/* Realtime Location Badge with 100m Radius status */}
+              <div className="bg-black/60 backdrop-blur-md border border-white/20 rounded-full py-1.5 px-4 flex items-center gap-2 text-white/90 text-[11px] mb-4 shadow-lg">
+                <MapPin size={13} className="text-emerald-400" />
+                <span className="font-medium truncate max-w-[220px]">
+                  {locationName} • {distanceMeters}m (Radius 100m)
                 </span>
-                {catatan && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border border-black" />
-                )}
-              </button>
+                <button
+                  onClick={fetchLocation}
+                  disabled={isLocating}
+                  className="text-white hover:text-blue-300 ml-1 flex items-center gap-1 active:scale-95"
+                >
+                  <RotateCw
+                    size={11}
+                    className={isLocating ? "animate-spin text-blue-400" : ""}
+                  />
+                  <span>Perbarui</span>
+                </button>
+              </div>
+
+              {/* Shutter Button & Quick Note Action */}
+              <div className="flex items-center justify-center gap-6 w-full max-w-[280px]">
+                <div className="w-11" />
+
+                {/* Circular Shutter Button */}
+                <button
+                  onClick={handleCapture}
+                  aria-label={`Ambil Foto ${getPageTitle()}`}
+                  className={`w-18 h-18 rounded-full border-[4px] border-white shadow-2xl flex items-center justify-center transition-all cursor-pointer ${
+                    isFaceAligned
+                      ? "bg-[#156bb8] ring-4 ring-[#156bb8]/40 active:scale-90"
+                      : "bg-slate-500 ring-4 ring-slate-400/50 opacity-80"
+                  }`}
+                >
+                  <div className="w-7 h-7 rounded-full bg-white shadow-inner" />
+                </button>
+
+                {/* Quick Note Button */}
+                <button
+                  onClick={handleTambahCatatan}
+                  aria-label="Tambah Catatan"
+                  className={`w-11 h-11 rounded-full border flex flex-col items-center justify-center transition-all active:scale-95 shadow-md relative ${
+                    catatan
+                      ? "bg-[#156bb8] border-white text-white"
+                      : "bg-black/50 border-white/30 text-white/90 hover:bg-black/70"
+                  }`}
+                >
+                  <MessageSquare size={16} />
+                  <span className="text-[7.5px] font-semibold mt-0.5 leading-none">
+                    {catatan ? "Catatan ✓" : "Catatan"}
+                  </span>
+                  {catatan && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border border-black" />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ══════════════ TAHAP 2: PREVIEW + BLUE BOTTOM SHEET ══════════════ */}
+      {/* ══════════════ TAHAP 2: PREVIEW + BLUE BOTTOM SHEET RESPONSIVE ══════════════ */}
       {stage === "preview" && (
-        <div className="min-h-screen bg-gradient-to-b from-[#2a8ee4] via-[#1f7cd0] to-[#156bb8] flex flex-col relative z-10 overflow-hidden">
+        <div className="min-h-screen bg-gradient-to-b from-[#2a8ee4] via-[#1f7cd0] to-[#156bb8] flex flex-col items-center relative z-10 overflow-x-hidden">
           {/* Watermark Logo Bisa Media Putih Blur di ujung kanan */}
           <div className="absolute -right-6 -top-4 w-60 h-60 pointer-events-none opacity-20 filter blur-[0.8px] rotate-[-6deg] select-none">
             <img
@@ -681,290 +798,295 @@ function CheckInContent() {
             />
           </div>
 
-          {/* Top Bar */}
-          <div className="pt-4 pb-2 px-4 flex items-center justify-between text-white relative z-20">
-            <button
-              onClick={() => setStage("camera")}
-              className="text-white hover:opacity-80 active:scale-90 transition-transform p-1 -ml-1"
-            >
-              <ChevronLeft size={24} />
-            </button>
-            <div className="flex items-center gap-2">
-              {isCheckOut || isBreakEnd ? (
-                <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-white">
-                  <LogOut size={15} strokeWidth={2.5} />
-                </div>
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-white">
-                  <LogIn size={15} strokeWidth={2.5} />
-                </div>
-              )}
-              <h1 className="text-white font-bold italic text-[18px] tracking-wide">
-                {getPageTitle()}
-              </h1>
-            </div>
-            <div className="w-6" />
-          </div>
-
-          {/* Top Half: Captured Image Preview */}
-          <div className="flex-1 relative overflow-hidden flex items-center justify-center bg-slate-900 mx-3 rounded-2xl border border-white/20 shadow-xl my-2">
-            {capturedImage && capturedImage !== "/silhouette_captured.png" ? (
-              <img
-                src={capturedImage}
-                alt="Foto Absensi"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full bg-[#0a1828] flex items-center justify-center">
-                <svg viewBox="0 0 100 120" fill="none" className="w-72 h-80">
-                  <path
-                    d="M50 15C36 15 25 28 25 44C25 56 31 66 40 70C22 75 8 92 8 115H92C92 92 78 75 60 70C69 66 75 56 75 44C75 28 64 15 50 15Z"
-                    fill="#020813"
-                  />
-                </svg>
-              </div>
-            )}
-
-            {/* Retake Camera Button */}
-            <button
-              onClick={() => setStage("camera")}
-              className="absolute top-3 left-4 bg-black/60 hover:bg-black/80 backdrop-blur-sm text-white text-[11px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
-            >
-              <Camera size={13} />
-              <span>Foto Ulang</span>
-            </button>
-          </div>
-
-          {/* Lower Half: Blue Bottom Sheet */}
-          <div className="bg-[#156bb8] rounded-t-[32px] pt-3 px-4 pb-6 shadow-2xl text-white">
-            {/* Handle Drag Bar */}
-            <div className="flex items-center justify-center mb-3">
-              <div className="w-8 h-1 bg-white/40 rounded-full" />
-            </div>
-
-            <div className="flex gap-3 items-stretch">
-              {/* ── Left Column: Realtime OpenStreetMap Card with 100m Radius in Tasikmalaya ── */}
-              <div className="w-[46%] bg-white rounded-2xl overflow-hidden relative shadow-md border border-white/20 min-h-[168px] flex flex-col justify-between p-2">
-                {/* 1. Live Interactive OpenStreetMap Embed */}
-                <div className="absolute inset-0 bg-[#e5e3df] overflow-hidden">
-                  <iframe
-                    title="Realtime Map Tasikmalaya"
-                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${currentLng - 0.002}%2C${currentLat - 0.0015}%2C${currentLng + 0.002}%2C${currentLat + 0.0015}&layer=mapnik`}
-                    className="w-full h-full border-0 pointer-events-none filter saturate-125"
-                    loading="lazy"
-                  />
-
-                  {/* 2. Visual 100m Radius Geofence Circle Overlay */}
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    {/* 100m Geofence Radius Aura */}
-                    <div className="w-28 h-28 rounded-full border-2 border-dashed border-blue-500 bg-blue-500/15 animate-pulse flex items-center justify-center">
-                      <div className="w-14 h-14 rounded-full border border-blue-400/40 bg-blue-400/10" />
-                    </div>
-
-                    {/* Radius 100m Badge */}
-                    <div className="absolute top-1.5 left-1.5 bg-blue-600/90 backdrop-blur-xs text-white text-[7.5px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                      <span>Radius 100m</span>
-                    </div>
-                  </div>
-
-                  {/* 3. Center Red Location Pin */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center pointer-events-none z-10">
-                    <div className="bg-white/95 px-1.5 py-0.5 rounded shadow-sm text-[7.5px] font-bold text-slate-800 whitespace-nowrap mb-0.5 border border-slate-200 truncate max-w-[90px]">
-                      {locationName.split(",")[0] || "Tasikmalaya"}
-                    </div>
-                    <div className="w-5 h-5 text-red-600 drop-shadow-md">
-                      <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5-2.5 2.5 2.5-1.12 2.5-2.5 2.5z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Refresh Map Button at bottom */}
-                <div className="relative z-20 mt-auto flex justify-between items-end">
-                  <button
-                    onClick={fetchLocation}
-                    aria-label="Refresh Lokasi"
-                    className="w-7 h-7 rounded-lg bg-white/90 shadow-sm flex items-center justify-center text-slate-700 hover:bg-white active:scale-95 transition-all"
-                  >
-                    <RotateCw
-                      size={13}
-                      className={isLocating ? "animate-spin text-blue-600" : ""}
-                    />
-                  </button>
-                  <span className="text-[7.5px] text-slate-600 font-bold bg-white/90 px-1 py-0.5 rounded shadow-2xs">
-                    Live GPS
-                  </span>
-                </div>
-              </div>
-
-              {/* ── Right Column: Attendance Specs ── */}
-              <div className="flex-1 flex flex-col justify-between py-0.5 pl-1 text-[11px]">
-                {isBreak ? (
-                  <div className="space-y-1.5">
-                    {/* Clock In Istirahat */}
-                    <div className="bg-white/10 backdrop-blur-xs rounded-xl px-2.5 py-1.5 border border-white/15 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-emerald-400/20 border border-emerald-300/30 flex items-center justify-center text-emerald-300 shrink-0">
-                          <LogIn size={13} strokeWidth={2.5} />
-                        </div>
-                        <div>
-                          <p className="text-[9px] text-white/70 font-medium leading-none">
-                            Mulai Istirahat
-                          </p>
-                          <p className="font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
-                            {isBreakEnd
-                              ? existingBreakStart || "12:00"
-                              : currentTimeStr || "-- : --"}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-[8px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded">
-                        Mulai
-                      </span>
-                    </div>
-
-                    {/* Clock Out Istirahat */}
-                    <div className="bg-white/10 backdrop-blur-xs rounded-xl px-2.5 py-1.5 border border-white/15 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-amber-400/20 border border-amber-300/30 flex items-center justify-center text-amber-300 shrink-0">
-                          <LogOut size={13} strokeWidth={2.5} />
-                        </div>
-                        <div>
-                          <p className="text-[9px] text-white/70 font-medium leading-none">
-                            Selesai Istirahat
-                          </p>
-                          <p className="font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
-                            {isBreakEnd ? currentTimeStr || "-- : --" : "-- : --"}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-[8px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded">
-                        Selesai
-                      </span>
-                    </div>
+          {/* Responsive Container (HP, Tablet, Laptop) */}
+          <div className="w-full max-w-md md:max-w-xl lg:max-w-2xl flex flex-col min-h-screen justify-between relative z-20">
+            {/* Top Bar */}
+            <div className="pt-4 pb-2 px-4 flex items-center justify-between text-white relative z-20">
+              <button
+                onClick={() => setStage("camera")}
+                className="text-white hover:opacity-80 active:scale-90 transition-transform p-1 -ml-1"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <div className="flex items-center gap-2">
+                {isCheckOut || isBreakEnd ? (
+                  <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-white">
+                    <LogOut size={15} strokeWidth={2.5} />
                   </div>
                 ) : (
-                  <div className="space-y-1.5">
-                    {/* Clock In */}
-                    <div className="bg-white/10 backdrop-blur-xs rounded-xl px-2.5 py-1.5 border border-white/15 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-emerald-400/20 border border-emerald-300/30 flex items-center justify-center text-emerald-300 shrink-0">
-                          <LogIn size={13} strokeWidth={2.5} />
-                        </div>
-                        <div>
-                          <p className="text-[9px] text-white/70 font-medium leading-none">Clock In</p>
-                          <p className="font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
-                            {isCheckOut ? "07:59 AM" : currentTimeStr || "-- : --"}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-[8px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded">
-                        Masuk
-                      </span>
-                    </div>
+                  <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-white">
+                    <LogIn size={15} strokeWidth={2.5} />
+                  </div>
+                )}
+                <h1 className="text-white font-bold italic text-[18px] tracking-wide">
+                  {getPageTitle()}
+                </h1>
+              </div>
+              <div className="w-6" />
+            </div>
 
-                    {/* Clock Out */}
-                    <div className="bg-white/10 backdrop-blur-xs rounded-xl px-2.5 py-1.5 border border-white/15 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-rose-400/20 border border-rose-300/30 flex items-center justify-center text-rose-300 shrink-0">
-                          <LogOut size={13} strokeWidth={2.5} />
-                        </div>
-                        <div>
-                          <p className="text-[9px] text-white/70 font-medium leading-none">Clock Out</p>
-                          <p className="font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
-                            {isCheckOut ? currentTimeStr || "-- : --" : "-- : --"}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-[8px] font-bold text-rose-300 bg-rose-500/20 px-1.5 py-0.5 rounded">
-                        Pulang
-                      </span>
-                    </div>
+            {/* Top Half: Captured Image Preview (Anti-Gepeng Proportional Frame) */}
+            <div className="flex-1 relative overflow-hidden flex items-center justify-center mx-3 my-2 min-h-[300px] max-h-[50vh]">
+              <div className="relative h-full w-auto aspect-[3/4] max-h-[48vh] rounded-2xl overflow-hidden border border-white/25 shadow-2xl bg-slate-900 group flex items-center justify-center">
+                {capturedImage && capturedImage !== "/silhouette_captured.png" ? (
+                  <img
+                    src={capturedImage}
+                    alt="Foto Absensi"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-[#0a1828] flex items-center justify-center">
+                    <svg viewBox="0 0 100 120" fill="none" className="w-56 h-64">
+                      <path
+                        d="M50 15C36 15 25 28 25 44C25 56 31 66 40 70C22 75 8 92 8 115H92C92 92 78 75 60 70C69 66 75 56 75 44C75 28 64 15 50 15Z"
+                        fill="#020813"
+                      />
+                    </svg>
                   </div>
                 )}
 
-                {/* Jarak Kantor (Maks. 100m) */}
-                <div className="flex items-center gap-2 mt-1.5">
-                  <div className="w-5 flex justify-center text-white/90">
-                    <MapPin size={15} />
-                  </div>
-                  <div>
-                    <p className="text-[9.5px] text-white/70 leading-none">
-                      Jarak Kantor (Maks. 100m)
-                    </p>
-                    <p className="font-bold text-[12px] text-white mt-0.5">
-                      {distanceMeters} m{" "}
-                      <span
-                        className={`text-[9px] font-semibold ${
-                          distanceMeters <= RADIUS_LIMIT
-                            ? "text-emerald-300"
-                            : "text-amber-300"
-                        }`}
-                      >
-                        ({distanceMeters <= RADIUS_LIMIT ? "Dalam 100m ✓" : "Luar 100m"})
-                      </span>
-                    </p>
-                  </div>
-                </div>
-
-                {/* Status Lokasi */}
-                <div className="flex items-center gap-2 mt-1.5">
-                  <div className="w-5 flex justify-center text-white/90">
-                    <Building2 size={15} />
-                  </div>
-                  <div>
-                    <p className="text-[9.5px] text-white/70 leading-none">Status</p>
-                    <p className="font-bold text-[12px] text-white mt-0.5">
-                      {distanceMeters <= RADIUS_LIMIT
-                        ? "Hadir Tepat Waktu"
-                        : "Luar Area Kantor"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Catatan */}
-                <div className="mt-2 pt-1 border-t border-white/20">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold text-white flex items-center gap-1">
-                      <MessageSquare size={10} />
-                      Catatan {isCheckOut ? "Clock Out" : "Clock In"}
-                    </p>
-                    <button
-                      onClick={handleTambahCatatan}
-                      className="text-[9px] text-white/90 underline hover:text-white"
-                    >
-                      {catatan ? "Ubah" : "Tambah"}
-                    </button>
-                  </div>
-                  <div
-                    onClick={handleTambahCatatan}
-                    className="mt-1 bg-white/10 hover:bg-white/15 cursor-pointer rounded-lg px-2 py-1.5 border border-white/15 transition-all flex items-center justify-between"
-                  >
-                    <p className="text-[10px] text-white/90 italic truncate max-w-[140px]">
-                      {catatan ? `"${catatan}"` : "+ Tambah catatan (opsional)"}
-                    </p>
-                    {catatan && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 ml-1" />
-                    )}
-                  </div>
-                </div>
+                {/* Retake Camera Button */}
+                <button
+                  onClick={() => setStage("camera")}
+                  className="absolute top-3 left-3 bg-black/60 hover:bg-black/80 backdrop-blur-sm text-white text-[11px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
+                >
+                  <Camera size={13} />
+                  <span>Foto Ulang</span>
+                </button>
               </div>
             </div>
 
-            {/* Full-width White Action Button */}
-            <button
-              onClick={handleConfirmAbsensi}
-              className="w-full mt-4 bg-white rounded-xl py-2.5 text-[#156bb8] font-bold italic text-[15px] shadow-lg hover:bg-slate-50 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
-            >
-              {isCheckOut || isBreakEnd ? (
-                <LogOut size={18} strokeWidth={2.5} className="text-rose-600" />
-              ) : (
-                <LogIn size={18} strokeWidth={2.5} className="text-emerald-600" />
-              )}
-              <span>{getButtonText()}</span>
-            </button>
+            {/* Lower Half: Blue Bottom Sheet */}
+            <div className="bg-[#156bb8] rounded-t-[32px] pt-3 px-4 pb-6 shadow-2xl text-white">
+              {/* Handle Drag Bar */}
+              <div className="flex items-center justify-center mb-3">
+                <div className="w-8 h-1 bg-white/40 rounded-full" />
+              </div>
+
+              <div className="flex gap-3 items-stretch">
+                {/* ── Left Column: Realtime OpenStreetMap Card with 100m Radius in Tasikmalaya ── */}
+                <div className="w-[46%] bg-white rounded-2xl overflow-hidden relative shadow-md border border-white/20 min-h-[168px] flex flex-col justify-between p-2">
+                  {/* 1. Live Interactive OpenStreetMap Embed */}
+                  <div className="absolute inset-0 bg-[#e5e3df] overflow-hidden">
+                    <iframe
+                      title="Realtime Map Tasikmalaya"
+                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${currentLng - 0.002}%2C${currentLat - 0.0015}%2C${currentLng + 0.002}%2C${currentLat + 0.0015}&layer=mapnik`}
+                      className="w-full h-full border-0 pointer-events-none filter saturate-125"
+                      loading="lazy"
+                    />
+
+                    {/* 2. Visual 100m Radius Geofence Circle Overlay */}
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                      {/* 100m Geofence Radius Aura */}
+                      <div className="w-28 h-28 rounded-full border-2 border-dashed border-blue-500 bg-blue-500/15 animate-pulse flex items-center justify-center">
+                        <div className="w-14 h-14 rounded-full border border-blue-400/40 bg-blue-400/10" />
+                      </div>
+
+                      {/* Radius 100m Badge */}
+                      <div className="absolute top-1.5 left-1.5 bg-blue-600/90 backdrop-blur-xs text-white text-[7.5px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                        <span>Radius 100m</span>
+                      </div>
+                    </div>
+
+                    {/* 3. Center Red Location Pin */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center pointer-events-none z-10">
+                      <div className="bg-white/95 px-1.5 py-0.5 rounded shadow-sm text-[7.5px] font-bold text-slate-800 whitespace-nowrap mb-0.5 border border-slate-200 truncate max-w-[90px]">
+                        {locationName.split(",")[0] || "Tasikmalaya"}
+                      </div>
+                      <div className="w-5 h-5 text-red-600 drop-shadow-md">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5-2.5 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Refresh Map Button at bottom */}
+                  <div className="relative z-20 mt-auto flex justify-between items-end">
+                    <button
+                      onClick={fetchLocation}
+                      aria-label="Refresh Lokasi"
+                      className="w-7 h-7 rounded-lg bg-white/90 shadow-sm flex items-center justify-center text-slate-700 hover:bg-white active:scale-95 transition-all"
+                    >
+                      <RotateCw
+                        size={13}
+                        className={isLocating ? "animate-spin text-blue-600" : ""}
+                      />
+                    </button>
+                    <span className="text-[7.5px] text-slate-600 font-bold bg-white/90 px-1 py-0.5 rounded shadow-2xs">
+                      Live GPS
+                    </span>
+                  </div>
+                </div>
+
+                {/* ── Right Column: Attendance Specs ── */}
+                <div className="flex-1 flex flex-col justify-between py-0.5 pl-1 text-[11px]">
+                  {isBreak ? (
+                    <div className="space-y-1.5">
+                      {/* Clock In Istirahat */}
+                      <div className="bg-white/10 backdrop-blur-xs rounded-xl px-2.5 py-1.5 border border-white/15 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-emerald-400/20 border border-emerald-300/30 flex items-center justify-center text-emerald-300 shrink-0">
+                            <LogIn size={13} strokeWidth={2.5} />
+                          </div>
+                          <div>
+                            <p className="text-[9px] text-white/70 font-medium leading-none">
+                              Mulai Istirahat
+                            </p>
+                            <p className="font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
+                              {isBreakEnd
+                                ? existingBreakStart || "12:00"
+                                : currentTimeStr || "-- : --"}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[8px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded">
+                          Mulai
+                        </span>
+                      </div>
+
+                      {/* Clock Out Istirahat */}
+                      <div className="bg-white/10 backdrop-blur-xs rounded-xl px-2.5 py-1.5 border border-white/15 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-amber-400/20 border border-amber-300/30 flex items-center justify-center text-amber-300 shrink-0">
+                            <LogOut size={13} strokeWidth={2.5} />
+                          </div>
+                          <div>
+                            <p className="text-[9px] text-white/70 font-medium leading-none">
+                              Selesai Istirahat
+                            </p>
+                            <p className="font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
+                              {isBreakEnd ? currentTimeStr || "-- : --" : "-- : --"}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[8px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded">
+                          Selesai
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {/* Clock In */}
+                      <div className="bg-white/10 backdrop-blur-xs rounded-xl px-2.5 py-1.5 border border-white/15 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-emerald-400/20 border border-emerald-300/30 flex items-center justify-center text-emerald-300 shrink-0">
+                            <LogIn size={13} strokeWidth={2.5} />
+                          </div>
+                          <div>
+                            <p className="text-[9px] text-white/70 font-medium leading-none">Clock In</p>
+                            <p className="font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
+                              {isCheckOut ? "07:59 AM" : currentTimeStr || "-- : --"}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[8px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded">
+                          Masuk
+                        </span>
+                      </div>
+
+                      {/* Clock Out */}
+                      <div className="bg-white/10 backdrop-blur-xs rounded-xl px-2.5 py-1.5 border border-white/15 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-rose-400/20 border border-rose-300/30 flex items-center justify-center text-rose-300 shrink-0">
+                            <LogOut size={13} strokeWidth={2.5} />
+                          </div>
+                          <div>
+                            <p className="text-[9px] text-white/70 font-medium leading-none">Clock Out</p>
+                            <p className="font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
+                              {isCheckOut ? currentTimeStr || "-- : --" : "-- : --"}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[8px] font-bold text-rose-300 bg-rose-500/20 px-1.5 py-0.5 rounded">
+                          Pulang
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Jarak Kantor (Maks. 100m) */}
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <div className="w-5 flex justify-center text-white/90">
+                      <MapPin size={15} />
+                    </div>
+                    <div>
+                      <p className="text-[9.5px] text-white/70 leading-none">
+                        Jarak Kantor (Maks. 100m)
+                      </p>
+                      <p className="font-bold text-[12px] text-white mt-0.5">
+                        {distanceMeters} m{" "}
+                        <span
+                          className={`text-[9px] font-semibold ${
+                            distanceMeters <= RADIUS_LIMIT
+                              ? "text-emerald-300"
+                              : "text-amber-300"
+                          }`}
+                        >
+                          ({distanceMeters <= RADIUS_LIMIT ? "Dalam 100m ✓" : "Luar 100m"})
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Status Lokasi */}
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <div className="w-5 flex justify-center text-white/90">
+                      <Building2 size={15} />
+                    </div>
+                    <div>
+                      <p className="text-[9.5px] text-white/70 leading-none">Status</p>
+                      <p className="font-bold text-[12px] text-white mt-0.5">
+                        {distanceMeters <= RADIUS_LIMIT
+                          ? "Hadir Tepat Waktu"
+                          : "Luar Area Kantor"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Catatan */}
+                  <div className="mt-2 pt-1 border-t border-white/20">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-bold text-white flex items-center gap-1">
+                        <MessageSquare size={10} />
+                        Catatan {isCheckOut ? "Clock Out" : "Clock In"}
+                      </p>
+                      <button
+                        onClick={handleTambahCatatan}
+                        className="text-[9px] text-white/90 underline hover:text-white"
+                      >
+                        {catatan ? "Ubah" : "Tambah"}
+                      </button>
+                    </div>
+                    <div
+                      onClick={handleTambahCatatan}
+                      className="mt-1 bg-white/10 hover:bg-white/15 cursor-pointer rounded-lg px-2 py-1.5 border border-white/15 transition-all flex items-center justify-between"
+                    >
+                      <p className="text-[10px] text-white/90 italic truncate max-w-[140px]">
+                        {catatan ? `"${catatan}"` : "+ Tambah catatan (opsional)"}
+                      </p>
+                      {catatan && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 ml-1" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Full-width White Action Button */}
+              <button
+                onClick={handleConfirmAbsensi}
+                className="w-full mt-4 bg-white rounded-xl py-2.5 text-[#156bb8] font-bold italic text-[15px] shadow-lg hover:bg-slate-50 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
+              >
+                {isCheckOut || isBreakEnd ? (
+                  <LogOut size={18} strokeWidth={2.5} className="text-rose-600" />
+                ) : (
+                  <LogIn size={18} strokeWidth={2.5} className="text-emerald-600" />
+                )}
+                <span>{getButtonText()}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
