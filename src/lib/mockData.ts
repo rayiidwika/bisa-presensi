@@ -13,8 +13,8 @@ import type {
 export const currentEmployee: Employee = {
   id: "EMP-001",
   name: "Setiawan",
-  division: "Information Technology",
-  position: "Frontend Developer",
+  division: "IT",
+  position: "IT Programmer",
   nip: "2024001",
   shift: { name: "Regular", startTime: "08:00", endTime: "17:00" },
 };

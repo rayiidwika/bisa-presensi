@@ -311,10 +311,10 @@ export default function HomePage() {
                 Setiawan
               </h2>
               <p className="text-[13px] text-slate-500 font-semibold mt-1">
-                Divisi : Information Technology
+                Divisi : IT
               </p>
               <p className="text-[13px] text-slate-500 font-semibold mt-0.5">
-                Staff : Information Technology
+                Staff : IT Programmer
               </p>
             </div>
 
