@@ -148,7 +148,7 @@ export default function HomePage() {
       // Sedang istirahat -> Langsung ke scan Selesai Istirahat
       router.push("/absensi/check-in?type=break_end");
     } else {
-      // Sudah selesai istirahat -> Tampilkan riwayat dengan opsi jika ingin scan ulang
+      // Sudah selesai istirahat -> Tampilkan pop-up informasi jam istirahat dengan tombol Tutup saja
       Swal.fire({
         title: "Istirahat Hari Ini",
         html: `
@@ -163,24 +163,15 @@ export default function HomePage() {
                 <span class="font-bold text-blue-700">${breakEndTime}</span>
               </div>
             </div>
-            <p class="text-xs text-slate-500">Anda sudah menyelesaikan istirahat hari ini. Ingin memperbarui absensi istirahat?</p>
+            <p class="text-xs text-slate-500">Anda sudah menyelesaikan istirahat hari ini.</p>
           </div>
         `,
         icon: "info",
-        showCancelButton: true,
-        showDenyButton: true,
+        iconColor: "#156bb8",
         confirmButtonColor: "#156bb8",
-        denyButtonColor: "#0284c7",
-        cancelButtonColor: "#94a3b8",
-        confirmButtonText: "Selesai Istirahat Ulang",
-        denyButtonText: "Clock In Ulang",
-        cancelButtonText: "Tutup",
-      }).then((res) => {
-        if (res.isConfirmed) {
-          router.push("/absensi/check-in?type=break_end");
-        } else if (res.isDenied) {
-          router.push("/absensi/check-in?type=break_start");
-        }
+        confirmButtonText: "Tutup",
+        showCancelButton: false,
+        showDenyButton: false,
       });
     }
   };
@@ -552,7 +543,7 @@ export default function HomePage() {
                 Terlambat
               </h4>
               <p className="text-[10px] text-slate-500 font-medium italic mt-0.5 whitespace-nowrap">
-                - 15 Menit / 0 Hari
+                - 15 Menit
               </p>
             </div>
           </div>

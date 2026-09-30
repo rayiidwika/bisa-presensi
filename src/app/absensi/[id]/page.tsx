@@ -505,12 +505,6 @@ export default function AbsensiDetailPage() {
                     color: "text-emerald-500",
                   },
                   {
-                    icon: <Coffee size={14} />,
-                    label: "Jam Istirahat",
-                    value: `${breakTimeDisplay} WIB`,
-                    color: "text-amber-500",
-                  },
-                  {
                     icon: <MapPin size={14} />,
                     label: "Lokasi Clock In",
                     value: checkInLocation,
@@ -547,12 +541,6 @@ export default function AbsensiDetailPage() {
                     label: "Jam Keluar",
                     value: `${checkOutTime} WIB`,
                     color: "text-rose-500",
-                  },
-                  {
-                    icon: <Coffee size={14} />,
-                    label: "Jam Istirahat",
-                    value: `${breakTimeDisplay} WIB`,
-                    color: "text-amber-500",
                   },
                   {
                     icon: <MapPin size={14} />,
