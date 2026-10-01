@@ -1,7 +1,16 @@
 "use client";
 
 import { useRef, useState, useEffect, useMemo } from "react";
-import { Image as ImageIcon, Video, Link2, X, Trash2, ExternalLink, CheckCircle2 } from "lucide-react";
+import {
+  Video,
+  Link2,
+  X,
+  Trash2,
+  ExternalLink,
+  CheckCircle2,
+  FileText,
+  FileUp,
+} from "lucide-react";
 import { formatFileSize } from "@/lib/utils";
 
 export type AttachmentType = "photo" | "video" | "link";
@@ -14,6 +23,12 @@ interface AttachmentUploaderProps {
   linkValue: string;
   onLinkChange: (link: string) => void;
 }
+
+const getFileExt = (name?: string) => {
+  if (!name) return "FILE";
+  const parts = name.split(".");
+  return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : "FILE";
+};
 
 export default function AttachmentUploader({
   attachmentType,
@@ -44,12 +59,8 @@ export default function AttachmentUploader({
 
   const handlePhotoSelect = (file: File) => {
     setError(null);
-    if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
-      setError("Harap pilih file gambar (JPG, PNG, WEBP) atau PDF");
-      return;
-    }
     if (file.size > 10 * 1024 * 1024) {
-      setError("Ukuran foto maksimal 10 MB");
+      setError("Ukuran file maksimal 10 MB");
       return;
     }
     onFileChange(file);
@@ -86,7 +97,7 @@ export default function AttachmentUploader({
 
   return (
     <div className="space-y-2.5">
-      {/* Segmented Pill Tabs: Foto, Video, Link */}
+      {/* Segmented Pill Tabs: Foto / File, Video, Link */}
       <div className="bg-[#edf5fb] p-1 rounded-xl flex items-center gap-1 border border-[#c8e0f0]">
         <button
           type="button"
@@ -100,8 +111,8 @@ export default function AttachmentUploader({
               : "text-[#3b668d] hover:bg-[#dbebf8]"
           }`}
         >
-          <ImageIcon size={14} strokeWidth={2.2} />
-          <span>Foto</span>
+          <FileUp size={14} strokeWidth={2.2} />
+          <span>Foto / File</span>
         </button>
 
         <button
@@ -137,10 +148,10 @@ export default function AttachmentUploader({
         </button>
       </div>
 
-      {/* ═══════════ TAB FOTO ═══════════ */}
+      {/* ═══════════ TAB FOTO / FILE ═══════════ */}
       {attachmentType === "photo" && (
         <div className="space-y-2">
-          {!fileValue || !fileValue.type.startsWith("image/") ? (
+          {!fileValue ? (
             <div
               onDrop={handleDrop}
               onDragOver={(e) => {
@@ -156,20 +167,20 @@ export default function AttachmentUploader({
               }`}
             >
               <div className="w-12 h-12 rounded-full bg-[#ddeef8] text-[#1a7dc4] flex items-center justify-center shadow-2xs">
-                <ImageIcon size={22} strokeWidth={2.2} />
+                <FileUp size={22} strokeWidth={2.2} />
               </div>
               <div className="text-center">
                 <p className="text-xs sm:text-sm font-bold text-[#1a3c5e]">
-                  Unggah Foto Bukti
+                  Unggah Foto / File Bukti
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Klik atau seret file JPG, PNG, WEBP (maks. 10 MB)
+                  Klik atau seret file foto atau dokumen apapun (maks. 10 MB)
                 </p>
               </div>
               <input
                 ref={photoInputRef}
                 type="file"
-                accept="image/*,.pdf"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,.zip,.rar"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
@@ -179,9 +190,9 @@ export default function AttachmentUploader({
             </div>
           ) : (
             <div className="border border-[#b9d9ee] rounded-2xl p-3 bg-[#f8fcff] flex items-center gap-3 shadow-xs">
-              {/* Thumbnail Image */}
-              <div className="w-14 h-14 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200">
-                {previewUrl ? (
+              {/* Thumbnail / Document Icon */}
+              <div className="w-14 h-14 rounded-xl bg-white overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center">
+                {fileValue.type.startsWith("image/") && previewUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={previewUrl}
@@ -189,8 +200,11 @@ export default function AttachmentUploader({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-slate-400">
-                    <ImageIcon size={20} />
+                  <div className="w-full h-full bg-[#eef7fd] flex flex-col items-center justify-center text-[#1a7dc4]">
+                    <FileText size={20} strokeWidth={2.2} />
+                    <span className="text-[8.5px] font-black uppercase tracking-wider mt-0.5 text-[#156bb8]">
+                      {getFileExt(fileValue.name)}
+                    </span>
                   </div>
                 )}
               </div>
@@ -199,7 +213,7 @@ export default function AttachmentUploader({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-bold text-[#1a7dc4] bg-[#e8f4fd] border border-[#c8e2f4] px-1.5 py-0.5 rounded">
-                    Foto Terpilih
+                    {fileValue.type.startsWith("image/") ? "Foto Terpilih" : "Dokumen Terpilih"}
                   </span>
                 </div>
                 <p className="text-xs font-bold text-[#1a3c5e] truncate mt-1">
@@ -232,7 +246,7 @@ export default function AttachmentUploader({
               <input
                 ref={photoInputRef}
                 type="file"
-                accept="image/*,.pdf"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,.zip,.rar"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

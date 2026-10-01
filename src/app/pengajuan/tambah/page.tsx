@@ -123,7 +123,7 @@ export default function TambahPengajuanPage() {
     if (form.attachmentType === "link" && form.attachmentLink?.trim()) {
       lampiranHtml = `<p><b>Lampiran:</b> Tautan (${form.attachmentLink.trim()})</p>`;
     } else if (form.attachment) {
-      const typeLabel = form.attachmentType === "video" ? "Video" : "Foto";
+      const typeLabel = form.attachmentType === "video" ? "Video" : "Foto / File";
       lampiranHtml = `<p><b>Lampiran:</b> ${typeLabel} (${form.attachment.name})</p>`;
     }
 

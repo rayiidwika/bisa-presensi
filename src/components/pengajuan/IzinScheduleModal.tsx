@@ -564,25 +564,25 @@ export default function IzinScheduleModal({
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Modal Footer Actions (Fixed at bottom) */}
-          <div className="px-4 py-3 bg-slate-50/95 border-t border-slate-100 flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold text-xs py-2.5 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
-            >
-              Batal
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveMain}
-              className="flex-2 bg-gradient-to-r from-[#1a7dc4] to-[#156bb8] text-white font-bold text-xs py-2.5 rounded-xl shadow-md shadow-[#156bb8]/25 hover:brightness-105 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <Check size={14} strokeWidth={2.5} />
-              <span>Terapkan Jadwal</span>
-            </button>
+            {/* ══════════════ 3. TOMBOL AKSI (DI DALAM SCROLL SUPAYA BISA DI-SCROLL KE ATAS DI IPHONE) ══════════════ */}
+            <div className="pt-2 pb-8 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold text-xs py-3 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer shadow-2xs"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveMain}
+                className="flex-2 bg-gradient-to-r from-[#1a7dc4] to-[#156bb8] text-white font-bold text-xs py-3 rounded-xl shadow-md shadow-[#156bb8]/25 hover:brightness-105 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Check size={14} strokeWidth={2.5} />
+                <span>Terapkan Jadwal</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -110,6 +110,8 @@ export default function PengajuanDetailPage() {
                   <div className="inline-flex items-center gap-2 text-xs font-semibold text-[#1a3c5e] bg-[#f0f8ff] border border-[#c8dcea] px-3 py-2 rounded-xl">
                     {req.attachmentType === "video" ? (
                       <Video size={14} className="text-[#1a7dc4]" />
+                    ) : req.attachment?.match(/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i) ? (
+                      <FileText size={14} className="text-[#1a7dc4]" />
                     ) : (
                       <ImageIcon size={14} className="text-[#1a7dc4]" />
                     )}
