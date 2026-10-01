@@ -1,7 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, X, Clock, Calendar, Check, RotateCcw } from "lucide-react";
+import React, { useState, useRef } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  X,
+  Clock,
+  Calendar,
+  Check,
+  RotateCcw,
+} from "lucide-react";
 
 interface IzinScheduleModalProps {
   isOpen: boolean;
@@ -74,6 +84,10 @@ export default function IzinScheduleModal({
   const [tempHour, setTempHour] = useState<number>(8);
   const [tempMinute, setTempMinute] = useState<number>(0);
 
+  // Touch gesture state untuk HP / Mobile Touchscreen
+  const hourTouchStartY = useRef<number | null>(null);
+  const minTouchStartY = useRef<number | null>(null);
+
   // Sync state when modal opens
   const [prevOpen, setPrevOpen] = useState(false);
   if (isOpen && !prevOpen) {
@@ -102,8 +116,18 @@ export default function IzinScheduleModal({
 
   // Nama Bulan dalam Bahasa Indonesia
   const monthNames = [
-    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
   ];
 
   // Label hari dalam Bahasa Indonesia (Minggu - Sabtu)
@@ -181,7 +205,6 @@ export default function IzinScheduleModal({
     const formatted = to24HourStr(tempHour, tempMinute);
     if (pickerModal === "start") {
       setStartTime(formatted);
-      // Jika end time belum diatur, beri saran otomatis misal +4 jam
       if (!endTime) {
         setEndTime(to24HourStr(Math.min(23, tempHour + 4), tempMinute));
       }
@@ -194,13 +217,54 @@ export default function IzinScheduleModal({
     setPickerModal(null);
   };
 
-  // Wheel Adjusters dalam Pop-up Scroll Picker
+  // Wheel / Step Adjusters dalam Pop-up Scroll Picker
   const changeTempHour = (delta: number) => {
     setTempHour((prev) => (prev + delta + 24) % 24);
   };
 
   const changeTempMinute = (delta: number) => {
     setTempMinute((prev) => (prev + delta + 60) % 60);
+  };
+
+  // Touch Drag Listeners untuk HP / Mobile
+  const handleHourTouchStart = (e: React.TouchEvent) => {
+    hourTouchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleHourTouchMove = (e: React.TouchEvent) => {
+    if (hourTouchStartY.current === null) return;
+    const currentY = e.touches[0].clientY;
+    const delta = hourTouchStartY.current - currentY;
+    const STEP = 18; // 18px per step
+    if (Math.abs(delta) >= STEP) {
+      const steps = Math.trunc(delta / STEP);
+      changeTempHour(steps);
+      hourTouchStartY.current = currentY;
+    }
+  };
+
+  const handleHourTouchEnd = () => {
+    hourTouchStartY.current = null;
+  };
+
+  const handleMinTouchStart = (e: React.TouchEvent) => {
+    minTouchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleMinTouchMove = (e: React.TouchEvent) => {
+    if (minTouchStartY.current === null) return;
+    const currentY = e.touches[0].clientY;
+    const delta = minTouchStartY.current - currentY;
+    const STEP = 16; // 16px per step
+    if (Math.abs(delta) >= STEP) {
+      const steps = Math.trunc(delta / STEP);
+      changeTempMinute(steps);
+      minTouchStartY.current = currentY;
+    }
+  };
+
+  const handleMinTouchEnd = () => {
+    minTouchStartY.current = null;
   };
 
   // Helper tampilan wheel picker
@@ -243,10 +307,16 @@ export default function IzinScheduleModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/50 backdrop-blur-xs animate-fade-in select-none">
-        <div className="bg-white w-full max-w-[340px] sm:max-w-[360px] rounded-[28px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[92vh]">
-          {/* Modal Header */}
-          <div className="px-5 pt-4 pb-2.5 flex items-center justify-between border-b border-slate-100 shrink-0">
+      {/* ══════════════ MODAL UTAMA JADWAL IZIN ══════════════ */}
+      <div
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto"
+      >
+        <div className="bg-white w-full max-w-[360px] sm:max-w-[380px] rounded-[24px] sm:rounded-[28px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[86dvh] sm:max-h-[88dvh] my-auto animate-scale-up">
+          {/* Modal Header (Fixed at top) */}
+          <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-slate-100 shrink-0 bg-white">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#1a7dc4] flex items-center justify-center">
                 <Calendar size={17} strokeWidth={2.3} />
@@ -261,29 +331,35 @@ export default function IzinScheduleModal({
               </div>
             </div>
             <button
+              type="button"
               onClick={onClose}
-              className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 flex items-center justify-center transition-all cursor-pointer"
+              className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 flex items-center justify-center transition-all cursor-pointer active:scale-95"
+              aria-label="Tutup"
             >
               <X size={15} />
             </button>
           </div>
 
-          {/* Modal Scroll Content */}
-          <div className="px-4 py-3 overflow-y-auto space-y-3.5 flex-1">
+          {/* Modal Scrollable Content (Fluid & Smooth on Mobile) */}
+          <div
+            className="px-4 py-3 sm:py-3.5 overflow-y-auto space-y-3.5 flex-1 overscroll-contain touch-pan-y"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             {/* ══════════════ 1. PILIH TANGGAL ══════════════ */}
             <div>
-              <h4 className="text-[13px] font-bold text-slate-800 mb-2 px-1">
+              <h4 className="text-[13px] font-bold text-slate-800 mb-2 px-0.5">
                 Pilih Tanggal
               </h4>
 
               {/* Calendar Card */}
               <div className="bg-white rounded-2xl border border-slate-200/90 p-3 shadow-xs">
                 {/* Month Navigator */}
-                <div className="flex items-center justify-center gap-6 mb-3">
+                <div className="flex items-center justify-between px-1 mb-3">
                   <button
                     type="button"
                     onClick={handlePrevMonth}
-                    className="p-1 rounded-full text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-700 bg-slate-50 hover:bg-slate-100 active:scale-90 transition-all cursor-pointer"
+                    aria-label="Bulan Sebelumnya"
                   >
                     <ChevronLeft size={16} strokeWidth={2.5} />
                   </button>
@@ -293,14 +369,15 @@ export default function IzinScheduleModal({
                   <button
                     type="button"
                     onClick={handleNextMonth}
-                    className="p-1 rounded-full text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-700 bg-slate-50 hover:bg-slate-100 active:scale-90 transition-all cursor-pointer"
+                    aria-label="Bulan Berikutnya"
                   >
                     <ChevronRight size={16} strokeWidth={2.5} />
                   </button>
                 </div>
 
                 {/* Day Labels */}
-                <div className="grid grid-cols-7 text-center text-[10px] font-semibold text-slate-600 mb-1.5">
+                <div className="grid grid-cols-7 text-center text-[10px] font-bold text-slate-400 mb-1.5 select-none">
                   {dayLabels.map((d, i) => (
                     <div key={i} className="py-0.5">
                       {d}
@@ -315,7 +392,7 @@ export default function IzinScheduleModal({
                     return (
                       <div
                         key={`prev-${i}`}
-                        className="py-1 text-slate-300 font-normal pointer-events-none"
+                        className="h-8 flex items-center justify-center text-slate-300 font-normal pointer-events-none select-none text-[11px]"
                       >
                         {dayNum}
                       </div>
@@ -330,21 +407,22 @@ export default function IzinScheduleModal({
                     const inRange = startDate && endDate && iso >= startDate && iso <= endDate;
                     const isToday = iso === todayIso;
 
-                    let circleCls = "w-7 h-7 mx-auto rounded-full flex items-center justify-center font-medium transition-all ";
+                    let circleCls =
+                      "w-8 h-8 mx-auto rounded-full flex items-center justify-center font-medium transition-all text-xs ";
 
                     if (isStart || isEnd) {
                       circleCls += "bg-[#1a7dc4] text-white font-bold shadow-xs scale-105";
                     } else if (inRange) {
                       circleCls += "bg-[#dbeafe] text-[#1e40af] font-semibold";
                     } else {
-                      circleCls += "text-slate-600 hover:bg-slate-100";
+                      circleCls += "text-slate-600 hover:bg-slate-100 active:scale-95";
                     }
 
                     return (
                       <div
                         key={dayNum}
                         onClick={() => handleDateClick(iso)}
-                        className="relative py-0.5 cursor-pointer"
+                        className="relative py-0.5 cursor-pointer select-none"
                       >
                         <div className={circleCls}>{dayNum}</div>
                         {isToday && !isStart && !isEnd && (
@@ -359,7 +437,7 @@ export default function IzinScheduleModal({
                   }).map((_, i) => (
                     <div
                       key={`next-${i}`}
-                      className="py-1 text-slate-300 font-normal pointer-events-none"
+                      className="h-8 flex items-center justify-center text-slate-300 font-normal pointer-events-none select-none text-[11px]"
                     >
                       {i + 1}
                     </div>
@@ -382,7 +460,7 @@ export default function IzinScheduleModal({
 
             {/* ══════════════ 2. PILIH JAM (HANYA 2 TOMBOL SESUAI GAMBAR 2) ══════════════ */}
             <div>
-              <div className="flex items-center justify-between mb-2 px-1">
+              <div className="flex items-center justify-between mb-2 px-0.5">
                 <h4 className="text-[13px] font-bold text-slate-800">
                   Waktu Izin
                 </h4>
@@ -394,7 +472,7 @@ export default function IzinScheduleModal({
                       setStartTime("");
                       setEndTime("");
                     }}
-                    className="flex items-center gap-1 text-[10px] font-bold text-[#1a7dc4] hover:text-red-500 transition-colors cursor-pointer"
+                    className="flex items-center gap-1 text-[10px] font-bold text-[#1a7dc4] hover:text-red-500 active:scale-95 transition-all cursor-pointer"
                   >
                     <RotateCcw size={11} />
                     <span>Seharian (--:--)</span>
@@ -403,13 +481,13 @@ export default function IzinScheduleModal({
               </div>
 
               {isSingleDay ? (
-                /* Tampilan 2 Tombol Jam Mulai & Jam Selesai Persis Gambar Referensi */
+                /* Tampilan 2 Tombol Jam Mulai & Jam Selesai */
                 <div>
                   <div className="grid grid-cols-2 gap-2.5">
                     {/* Tombol 1: Jam Mulai */}
                     <div
                       onClick={() => openTimePicker("start")}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer active:scale-[0.98] ${
                         startTime
                           ? "bg-blue-50/90 border-[#1a7dc4] shadow-xs ring-2 ring-[#1a7dc4]/20"
                           : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
@@ -438,7 +516,7 @@ export default function IzinScheduleModal({
                     {/* Tombol 2: Jam Selesai */}
                     <div
                       onClick={() => openTimePicker("end")}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer active:scale-[0.98] ${
                         endTime
                           ? "bg-blue-50/90 border-[#1a7dc4] shadow-xs ring-2 ring-[#1a7dc4]/20"
                           : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
@@ -488,12 +566,12 @@ export default function IzinScheduleModal({
             </div>
           </div>
 
-          {/* Modal Footer Actions */}
-          <div className="px-4 py-3 bg-slate-50/90 border-t border-slate-100 flex items-center gap-2 shrink-0">
+          {/* Modal Footer Actions (Fixed at bottom) */}
+          <div className="px-4 py-3 bg-slate-50/95 border-t border-slate-100 flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold text-xs py-2.5 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
+              className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold text-xs py-2.5 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
             >
               Batal
             </button>
@@ -509,137 +587,236 @@ export default function IzinScheduleModal({
         </div>
       </div>
 
-      {/* ══════════════ POP-UP PEMILIHAN JAM SCROLL ══════════════ */}
+      {/* ══════════════ POP-UP PEMILIHAN JAM SCROLL & TOUCH ══════════════ */}
       {pickerModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in select-none">
-          <div className="bg-white w-full max-w-[300px] rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-scale-up">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPickerModal(null);
+          }}
+          className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto"
+        >
+          <div className="bg-white w-full max-w-[320px] rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col my-auto animate-scale-up">
             {/* Header Pop-up Scroll */}
-            <div className="px-4 pt-3.5 pb-2.5 flex items-center justify-between border-b border-slate-100">
+            <div className="px-4 pt-3.5 pb-2.5 flex items-center justify-between border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#1a7dc4] flex items-center justify-center">
-                  <Clock size={15} strokeWidth={2.3} />
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#1a7dc4] flex items-center justify-center">
+                  <Clock size={16} strokeWidth={2.3} />
                 </div>
-                <h4 className="text-xs font-bold text-slate-800">
-                  {pickerModal === "start" ? "Atur Jam Mulai" : "Atur Jam Selesai"}
-                </h4>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800">
+                    {pickerModal === "start" ? "Atur Jam Mulai" : "Atur Jam Selesai"}
+                  </h4>
+                  <p className="text-[10px] text-slate-400 font-medium">
+                    Geser jari, scroll, atau tekan panah
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setPickerModal(null)}
-                className="w-6 h-6 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 flex items-center justify-center cursor-pointer"
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 flex items-center justify-center cursor-pointer active:scale-95 transition-all"
+                aria-label="Tutup"
               >
-                <X size={13} />
+                <X size={14} />
               </button>
             </div>
 
-            {/* Body: Scroll Wheel Picker */}
-            <div className="py-4 px-6 bg-slate-50/50">
-              <div className="bg-white rounded-2xl border border-slate-200/90 py-2.5 px-4 shadow-xs relative">
+            {/* Body: Scroll & Touch Wheel Picker */}
+            <div className="py-3 px-4 bg-slate-50/50 flex-1 overflow-y-auto">
+              <div className="bg-white rounded-2xl border border-slate-200/90 py-3 px-3 shadow-xs relative">
                 {/* Header Kolom */}
-                <div className="flex items-center justify-center gap-12 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                  <span className="w-14 text-center">Jam</span>
+                <div className="flex items-center justify-around text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 select-none">
+                  <span className="w-16 text-center">Jam</span>
                   <span className="w-4 text-center text-transparent">:</span>
-                  <span className="w-14 text-center">Menit</span>
+                  <span className="w-16 text-center">Menit</span>
                 </div>
 
-                <div className="flex items-center justify-center gap-4 relative select-none">
-                  {/* 2 Garis Horizontal Pembatas */}
-                  <div className="absolute top-[36%] left-4 right-4 h-[1.5px] bg-slate-200/90 pointer-events-none" />
-                  <div className="absolute bottom-[36%] left-4 right-4 h-[1.5px] bg-slate-200/90 pointer-events-none" />
+                <div className="flex items-center justify-center gap-3 relative select-none">
+                  {/* Garis Horizontal Pembatas Aktif */}
+                  <div className="absolute top-[48%] -translate-y-4 left-3 right-3 h-[38px] bg-blue-50/70 border-y border-blue-200/60 rounded-lg pointer-events-none -z-0" />
 
                   {/* 1. Hour Column (00 - 23) */}
-                  <div
-                    className="flex flex-col items-center w-14 cursor-ns-resize"
-                    onWheel={(e) => {
-                      e.preventDefault();
-                      changeTempHour(e.deltaY > 0 ? 1 : -1);
-                    }}
-                  >
-                    <span
-                      onClick={() => changeTempHour(-2)}
-                      className="text-[11px] text-slate-300 font-semibold cursor-pointer py-0.5 hover:text-slate-400"
-                    >
-                      {pad2(prevH2)}
-                    </span>
-                    <span
+                  <div className="flex flex-col items-center w-16 relative z-10">
+                    <button
+                      type="button"
                       onClick={() => changeTempHour(-1)}
-                      className="text-xs text-slate-400 font-semibold cursor-pointer py-0.5 hover:text-slate-500"
+                      className="p-1 text-slate-400 hover:text-[#1a7dc4] active:scale-90 transition-transform cursor-pointer"
+                      aria-label="Kurang 1 Jam"
                     >
-                      {pad2(prevH)}
-                    </span>
-                    <span className="text-2xl font-black text-slate-900 my-0.5 py-0.5 scale-105">
-                      {pad2(tempHour)}
-                    </span>
-                    <span
+                      <ChevronUp size={16} strokeWidth={2.5} />
+                    </button>
+
+                    <div
+                      className="flex flex-col items-center w-full py-1 touch-none cursor-grab active:cursor-grabbing select-none"
+                      onWheel={(e) => {
+                        e.preventDefault();
+                        changeTempHour(e.deltaY > 0 ? 1 : -1);
+                      }}
+                      onTouchStart={handleHourTouchStart}
+                      onTouchMove={handleHourTouchMove}
+                      onTouchEnd={handleHourTouchEnd}
+                    >
+                      <span
+                        onClick={() => changeTempHour(-2)}
+                        className="text-[11px] text-slate-300 font-semibold cursor-pointer py-0.5 hover:text-slate-400 active:scale-95 transition-all"
+                      >
+                        {pad2(prevH2)}
+                      </span>
+                      <span
+                        onClick={() => changeTempHour(-1)}
+                        className="text-xs text-slate-400 font-semibold cursor-pointer py-0.5 hover:text-slate-500 active:scale-95 transition-all"
+                      >
+                        {pad2(prevH)}
+                      </span>
+                      <span className="text-2xl font-black text-slate-900 my-0.5 py-0.5 scale-105">
+                        {pad2(tempHour)}
+                      </span>
+                      <span
+                        onClick={() => changeTempHour(1)}
+                        className="text-xs text-slate-400 font-semibold cursor-pointer py-0.5 hover:text-slate-500 active:scale-95 transition-all"
+                      >
+                        {pad2(nextH)}
+                      </span>
+                      <span
+                        onClick={() => changeTempHour(2)}
+                        className="text-[11px] text-slate-300 font-semibold cursor-pointer py-0.5 hover:text-slate-400 active:scale-95 transition-all"
+                      >
+                        {pad2(nextH2)}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
                       onClick={() => changeTempHour(1)}
-                      className="text-xs text-slate-400 font-semibold cursor-pointer py-0.5 hover:text-slate-500"
+                      className="p-1 text-slate-400 hover:text-[#1a7dc4] active:scale-90 transition-transform cursor-pointer"
+                      aria-label="Tambah 1 Jam"
                     >
-                      {pad2(nextH)}
-                    </span>
-                    <span
-                      onClick={() => changeTempHour(2)}
-                      className="text-[11px] text-slate-300 font-semibold cursor-pointer py-0.5 hover:text-slate-400"
-                    >
-                      {pad2(nextH2)}
-                    </span>
+                      <ChevronDown size={16} strokeWidth={2.5} />
+                    </button>
                   </div>
 
                   {/* Separator Titik Dua */}
-                  <div className="text-xl font-bold text-slate-400 pb-0.5">:</div>
+                  <div className="text-2xl font-black text-slate-400 pb-0.5 relative z-10">:</div>
 
                   {/* 2. Minute Column (00 - 59) */}
-                  <div
-                    className="flex flex-col items-center w-14 cursor-ns-resize"
-                    onWheel={(e) => {
-                      e.preventDefault();
-                      changeTempMinute(e.deltaY > 0 ? 1 : -1);
-                    }}
-                  >
-                    <span
-                      onClick={() => changeTempMinute(-2)}
-                      className="text-[11px] text-slate-300 font-semibold cursor-pointer py-0.5 hover:text-slate-400"
-                    >
-                      {pad2(prevM2)}
-                    </span>
-                    <span
+                  <div className="flex flex-col items-center w-16 relative z-10">
+                    <button
+                      type="button"
                       onClick={() => changeTempMinute(-1)}
-                      className="text-xs text-slate-400 font-semibold cursor-pointer py-0.5 hover:text-slate-500"
+                      className="p-1 text-slate-400 hover:text-[#1a7dc4] active:scale-90 transition-transform cursor-pointer"
+                      aria-label="Kurang 1 Menit"
                     >
-                      {pad2(prevM)}
-                    </span>
-                    <span className="text-2xl font-black text-slate-900 my-0.5 py-0.5 scale-105">
-                      {pad2(tempMinute)}
-                    </span>
-                    <span
+                      <ChevronUp size={16} strokeWidth={2.5} />
+                    </button>
+
+                    <div
+                      className="flex flex-col items-center w-full py-1 touch-none cursor-grab active:cursor-grabbing select-none"
+                      onWheel={(e) => {
+                        e.preventDefault();
+                        changeTempMinute(e.deltaY > 0 ? 1 : -1);
+                      }}
+                      onTouchStart={handleMinTouchStart}
+                      onTouchMove={handleMinTouchMove}
+                      onTouchEnd={handleMinTouchEnd}
+                    >
+                      <span
+                        onClick={() => changeTempMinute(-2)}
+                        className="text-[11px] text-slate-300 font-semibold cursor-pointer py-0.5 hover:text-slate-400 active:scale-95 transition-all"
+                      >
+                        {pad2(prevM2)}
+                      </span>
+                      <span
+                        onClick={() => changeTempMinute(-1)}
+                        className="text-xs text-slate-400 font-semibold cursor-pointer py-0.5 hover:text-slate-500 active:scale-95 transition-all"
+                      >
+                        {pad2(prevM)}
+                      </span>
+                      <span className="text-2xl font-black text-slate-900 my-0.5 py-0.5 scale-105">
+                        {pad2(tempMinute)}
+                      </span>
+                      <span
+                        onClick={() => changeTempMinute(1)}
+                        className="text-xs text-slate-400 font-semibold cursor-pointer py-0.5 hover:text-slate-500 active:scale-95 transition-all"
+                      >
+                        {pad2(nextM)}
+                      </span>
+                      <span
+                        onClick={() => changeTempMinute(2)}
+                        className="text-[11px] text-slate-300 font-semibold cursor-pointer py-0.5 hover:text-slate-400 active:scale-95 transition-all"
+                      >
+                        {pad2(nextM2)}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
                       onClick={() => changeTempMinute(1)}
-                      className="text-xs text-slate-400 font-semibold cursor-pointer py-0.5 hover:text-slate-500"
+                      className="p-1 text-slate-400 hover:text-[#1a7dc4] active:scale-90 transition-transform cursor-pointer"
+                      aria-label="Tambah 1 Menit"
                     >
-                      {pad2(nextM)}
-                    </span>
-                    <span
-                      onClick={() => changeTempMinute(2)}
-                      className="text-[11px] text-slate-300 font-semibold cursor-pointer py-0.5 hover:text-slate-400"
-                    >
-                      {pad2(nextM2)}
-                    </span>
+                      <ChevronDown size={16} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Shortcut Presets untuk Mobile Touchscreen */}
+                <div className="mt-3 pt-2.5 border-t border-slate-100 select-none">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-semibold text-slate-400">Pilihan Jam Cepat:</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-1 mb-2">
+                    {[8, 9, 12, 13, 17].map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => setTempHour(h)}
+                        className={`flex-1 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          tempHour === h
+                            ? "bg-[#1a7dc4] text-white shadow-xs scale-105"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95"
+                        }`}
+                      >
+                        {pad2(h)}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-semibold text-slate-400">Pilihan Menit Cepat:</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[0, 15, 30, 45].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setTempMinute(m)}
+                        className={`py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          tempMinute === m
+                            ? "bg-[#1a7dc4] text-white shadow-xs scale-105"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95"
+                        }`}
+                      >
+                        :{pad2(m)}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Footer Pop-up Scroll */}
-            <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+            <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setPickerModal(null)}
-                className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold text-xs py-2 rounded-xl hover:bg-slate-50 cursor-pointer"
+                className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold text-xs py-2 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
               >
                 Batal
               </button>
               <button
                 type="button"
                 onClick={saveTimePicker}
-                className="flex-1 bg-[#1a7dc4] hover:bg-[#156bb8] text-white font-bold text-xs py-2 rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                className="flex-1 bg-gradient-to-r from-[#1a7dc4] to-[#156bb8] hover:brightness-105 active:scale-95 text-white font-bold text-xs py-2 rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1 transition-all"
               >
                 <Check size={13} strokeWidth={2.5} />
                 <span>Simpan</span>
@@ -651,4 +828,5 @@ export default function IzinScheduleModal({
     </>
   );
 }
+
 

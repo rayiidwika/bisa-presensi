@@ -372,12 +372,12 @@ export default function HomePage() {
           {/* Employee Card Body - Bottom Rows: Jadwal Hari, Jam Realtime & Jam Kerja */}
           <div className="mt-4 pt-1 space-y-2">
             {/* Baris 1: Jam Realtime (Kiri) & Jam Shift (Kanan) - Sejajar Sempurna */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-baseline justify-between">
               <div className="flex items-baseline gap-1.5">
-                <span className="font-extrabold text-slate-800 text-[17px] sm:text-[18px] tracking-tight leading-tight">
+                <span className="font-black text-slate-800 text-[24px] sm:text-[26px] tracking-tight leading-none">
                   {realtimeClock || "--:--:--"}
                 </span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   WIB
                 </span>
               </div>
