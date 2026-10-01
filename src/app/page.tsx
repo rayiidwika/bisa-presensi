@@ -30,10 +30,11 @@ export default function HomePage() {
   const [checkInNotes, setCheckInNotes] = useState<string>("");
   const [checkOutNotes, setCheckOutNotes] = useState<string>("");
 
-  // Realtime Dates State
+  // Realtime Dates & Clock State
   const [todayCardDate, setTodayCardDate] = useState<string>("Rabu , 30 Sep 2026");
   const [todayRekapDate, setTodayRekapDate] = useState<string>("Rab, 30 September");
   const [currentMonthYear, setCurrentMonthYear] = useState<string>("September 2026");
+  const [realtimeClock, setRealtimeClock] = useState<string>("");
   const [pastRekapDays, setPastRekapDays] = useState<{ day: string; shift: string; time: string }[]>([
     { day: "Sel, 29 September", shift: "Reguler", time: "07:59 - 17:02" },
     { day: "Sen, 28 September", shift: "Reguler", time: "08:05 - 17:00" },
@@ -63,6 +64,17 @@ export default function HomePage() {
     setTodayRekapDate(tRekap);
     setTodayCardDate(tCard);
     setCurrentMonthYear(mYear);
+
+    // Realtime clock (updates every second)
+    const updateRealtimeClock = () => {
+      const d = new Date();
+      const h = String(d.getHours()).padStart(2, "0");
+      const m = String(d.getMinutes()).padStart(2, "0");
+      const s = String(d.getSeconds()).padStart(2, "0");
+      setRealtimeClock(`${h}:${m}:${s}`);
+    };
+    updateRealtimeClock();
+    const clockTimer = setInterval(updateRealtimeClock, 1000);
 
     // Generate 5 previous working days
     const past: { day: string; shift: string; time: string }[] = [];
@@ -135,6 +147,7 @@ export default function HomePage() {
     window.addEventListener("focus", syncAttendance);
     window.addEventListener("storage", syncAttendance);
     return () => {
+      clearInterval(clockTimer);
       window.removeEventListener("focus", syncAttendance);
       window.removeEventListener("storage", syncAttendance);
     };
@@ -322,9 +335,9 @@ export default function HomePage() {
 
         {/* ══════════════ EMPLOYEE CARD ══════════════ */}
         <div className="bg-white rounded-3xl p-4 sm:p-5 shadow-xl border border-white/60 relative z-10">
-          {/* NIP Badge */}
+          {/* Company Badge */}
           <div className="inline-block bg-[#156bb8] text-white text-[11.5px] font-bold px-3.5 py-1 rounded-md shadow-xs">
-            TAP - PT BISA MEDIA GRUP
+            PT BISA MEDIA GRUP
           </div>
 
           {/* Employee Card Body - Top Row: Info Karyawan & Avatar */}
@@ -356,13 +369,18 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Employee Card Body - Bottom Rows: Jadwal Hari & Jam Kerja (Sejajar Sempurna Kiri-Kanan) */}
-          <div className="mt-4 pt-1 space-y-1.5">
-            {/* Baris 1: Tanggal (Kiri) & Jam Shift (Kanan) */}
+          {/* Employee Card Body - Bottom Rows: Jadwal Hari, Jam Realtime & Jam Kerja */}
+          <div className="mt-4 pt-1 space-y-2">
+            {/* Baris 1: Jam Realtime (Kiri) & Jam Shift (Kanan) - Sejajar Sempurna */}
             <div className="flex items-center justify-between">
-              <p className="text-slate-400 font-semibold text-[12px] leading-tight">
-                {todayCardDate}
-              </p>
+              <div className="flex items-baseline gap-1.5">
+                <span className="font-extrabold text-slate-800 text-[17px] sm:text-[18px] tracking-tight leading-tight">
+                  {realtimeClock || "--:--:--"}
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  WIB
+                </span>
+              </div>
               <div className="w-[125px] text-center mr-2 sm:mr-4 shrink-0">
                 <p className="font-extrabold text-slate-800 text-[13.5px] leading-tight tracking-wide">
                   08.00 - 17.00
@@ -370,11 +388,17 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Baris 2: Shift Reguler (Kiri) & Total Jam Kerja (Kanan) */}
+            {/* Baris 2: Tanggal & Shift (Kiri) & Total Jam Kerja (Kanan) */}
             <div className="flex items-center justify-between">
-              <p className="font-extrabold text-slate-700 text-[13.5px] leading-tight">
-                Reguler
-              </p>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 font-semibold text-[12px] leading-tight">
+                  {todayCardDate}
+                </span>
+                <span className="text-slate-300 font-bold text-[11px]">•</span>
+                <span className="font-extrabold text-slate-700 text-[12.5px] leading-tight">
+                  Reguler
+                </span>
+              </div>
               <div className="w-[125px] flex items-center justify-center gap-1.5 text-slate-600 font-bold text-[13px] leading-tight mr-2 sm:mr-4 shrink-0">
                 <Clock size={14} className="text-[#156bb8] shrink-0" strokeWidth={2.4} />
                 <span className="whitespace-nowrap">{totalWorkHoursToday}</span>
@@ -387,67 +411,64 @@ export default function HomePage() {
 
           {/* Two Boxes: Clock In & Clock Out */}
           <div className="grid grid-cols-2 gap-2.5">
-            {/* Clock In Box */}
+            {/* Clock In Button */}
             <button
               onClick={() => router.push("/absensi/check-in")}
-              className="bg-white border border-slate-200/90 hover:border-emerald-400/80 hover:shadow-xs rounded-2xl py-3 px-3.5 text-center shadow-2xs active:scale-[0.98] transition-all cursor-pointer group"
+              className="bg-emerald-50/70 hover:bg-emerald-100/80 border border-emerald-200/90 hover:border-emerald-300 rounded-2xl py-3 px-3.5 text-center shadow-2xs hover:shadow-xs active:scale-[0.97] transition-all cursor-pointer group"
             >
-              <div className="flex items-center justify-center gap-1.5 text-slate-400 group-hover:text-emerald-600 transition-colors">
-                <LogIn size={15} className="text-emerald-500" strokeWidth={2.3} />
-                <span className="text-[12px] font-semibold text-slate-500 group-hover:text-emerald-700 transition-colors">
+              <div className="flex items-center justify-center gap-1.5 text-emerald-600 transition-colors">
+                <LogIn size={15} className="text-emerald-600" strokeWidth={2.4} />
+                <span className="text-[12px] font-bold text-emerald-700">
                   Clock In
                 </span>
               </div>
-              <p className="text-[20px] font-bold text-slate-800 tracking-wider mt-1 group-hover:text-emerald-700 transition-colors">
+              <p className="text-[20px] font-black text-slate-800 tracking-wider mt-1 group-hover:text-emerald-950 transition-colors">
                 {checkInTime}
               </p>
             </button>
 
-            {/* Clock Out Box */}
+            {/* Clock Out Button */}
             <button
               onClick={() => router.push("/absensi/check-in?type=out")}
-              className="bg-white border border-slate-200/90 hover:border-rose-400/80 hover:shadow-xs rounded-2xl py-3 px-3.5 text-center shadow-2xs active:scale-[0.98] transition-all cursor-pointer group"
+              className="bg-rose-50/70 hover:bg-rose-100/80 border border-rose-200/90 hover:border-rose-300 rounded-2xl py-3 px-3.5 text-center shadow-2xs hover:shadow-xs active:scale-[0.97] transition-all cursor-pointer group"
             >
-              <div className="flex items-center justify-center gap-1.5 text-slate-400 group-hover:text-rose-600 transition-colors">
-                <LogOut size={15} className="text-rose-500" strokeWidth={2.3} />
-                <span className="text-[12px] font-semibold text-slate-500 group-hover:text-rose-700 transition-colors">
+              <div className="flex items-center justify-center gap-1.5 text-rose-500 transition-colors">
+                <LogOut size={15} className="text-rose-500" strokeWidth={2.4} />
+                <span className="text-[12px] font-bold text-rose-700">
                   Clock Out
                 </span>
               </div>
-              <p className="text-[20px] font-bold text-slate-800 tracking-wider mt-1 group-hover:text-rose-700 transition-colors">
+              <p className="text-[20px] font-black text-slate-800 tracking-wider mt-1 group-hover:text-rose-950 transition-colors">
                 {checkOutTime}
               </p>
             </button>
           </div>
 
-          {/* Full-width Istirahat Button */}
+          {/* Full-width Istirahat Button (Kuning/Amber) */}
           <button
             onClick={handleIstirahatClick}
-            className={`w-full mt-2.5 rounded-xl py-2.5 px-3 text-center border transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer shadow-2xs ${
-              breakStartTime && !breakEndTime
-                ? "bg-amber-50/80 border-amber-300 hover:bg-amber-100/70 text-amber-800"
+            className={`w-full mt-2.5 rounded-xl py-2.5 px-3 text-center border transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer shadow-2xs ${breakStartTime && !breakEndTime
+                ? "bg-amber-100/90 border-amber-300 hover:bg-amber-200/80 text-amber-900 shadow-xs"
                 : breakStartTime && breakEndTime
-                ? "bg-emerald-50/80 border-emerald-300 hover:bg-emerald-100/70 text-emerald-800"
-                : "bg-white border-slate-200/90 hover:bg-slate-50 text-slate-700"
-            }`}
+                  ? "bg-amber-50/70 border-amber-200/90 hover:bg-amber-100/80 text-amber-800"
+                  : "bg-amber-50/50 border-amber-200/80 hover:bg-amber-100/60 text-amber-800"
+              }`}
           >
             <Coffee
               size={15}
-              strokeWidth={2.2}
+              strokeWidth={2.3}
               className={
                 breakStartTime && !breakEndTime
-                  ? "text-amber-600"
-                  : breakStartTime && breakEndTime
-                  ? "text-emerald-600"
-                  : "text-slate-400"
+                  ? "text-amber-700"
+                  : "text-amber-600"
               }
             />
-            <span className="text-[13px] font-semibold tracking-wide">
+            <span className="text-[13px] font-bold tracking-wide">
               {!breakStartTime
                 ? "Istirahat"
                 : !breakEndTime
-                ? `Selesai Istirahat (${breakStartTime})`
-                : `Istirahat (${breakStartTime} - ${breakEndTime})`}
+                  ? `Selesai Istirahat (${breakStartTime})`
+                  : `Istirahat (${breakStartTime} - ${breakEndTime})`}
             </span>
             {breakStartTime && !breakEndTime && (
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping ml-0.5" />
@@ -498,7 +519,14 @@ export default function HomePage() {
                 Hadir
               </h4>
               <p className="text-[10px] text-slate-500 font-medium italic mt-0.5 whitespace-nowrap">
-                4 Hari / 26 Hari
+                4 Hari / 28 Hari
+              </p>
+              <p
+                className="text-[9.5px] text-[#156bb8] font-bold italic mt-0.5 whitespace-nowrap flex items-center gap-1"
+                title="Total 32 Jam terealisasi dari 224 Jam Kerja (28 Hari / 1 Bulan)"
+              >
+                <Clock size={10} className="shrink-0 text-[#156bb8]" strokeWidth={2.4} />
+                <span>32 Jam / 224 Jam</span>
               </p>
             </div>
           </div>

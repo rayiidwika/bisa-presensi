@@ -50,7 +50,7 @@ export default function OvertimeCard({ request }: OvertimeCardProps) {
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1 line-clamp-1 italic">
-              "{request.description}"
+              &ldquo;{request.description}&rdquo;
             </p>
           </div>
         </div>

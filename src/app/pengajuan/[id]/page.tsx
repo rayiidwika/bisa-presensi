@@ -1,14 +1,17 @@
 "use client";
-import { useParams, notFound, useRouter } from "next/navigation";
+import { useParams, notFound } from "next/navigation";
 import { mockLeaveRequests, currentEmployee } from "@/lib/mockData";
 import { formatDate, leaveTypeLabel } from "@/lib/utils";
 import StatusBadge from "@/components/ui/StatusBadge";
-import { Calendar, Clock, FileText } from "lucide-react";
+import { Calendar, Clock, FileText, Image as ImageIcon, Video, Link2, ExternalLink } from "lucide-react";
 
 export default function PengajuanDetailPage() {
   const { id } = useParams<{ id: string }>();
   const req = mockLeaveRequests.find((r) => r.id === id);
   if (!req) notFound();
+
+  const isIzin = req.type === "izin";
+  const isSakit = req.type === "sakit";
 
   return (
     <div className="min-h-screen bg-[#ddeef8]">
@@ -66,9 +69,14 @@ export default function PengajuanDetailPage() {
           <div className="divide-y divide-slate-50">
             {[
               { icon: <FileText size={14}/>, label: "Tipe", value: leaveTypeLabel(req.type) },
-              { icon: <FileText size={14}/>, label: "Keperluan", value: req.keperluan },
+              ...(isSakit
+                ? []
+                : [{ icon: <FileText size={14}/>, label: isIzin ? "Keperluan Izin" : "Keperluan", value: req.keperluan }]),
               { icon: <Calendar size={14}/>, label: "Tanggal Mulai", value: formatDate(req.startDate) },
               { icon: <Calendar size={14}/>, label: "Tanggal Selesai", value: formatDate(req.endDate) },
+              ...(req.startTime && req.endTime && req.startTime !== "--:--"
+                ? [{ icon: <Clock size={14}/>, label: "Waktu Izin", value: `${req.startTime} - ${req.endTime} WIB` }]
+                : []),
               { icon: <Clock size={14}/>, label: "Durasi", value: `${req.totalDays} hari` },
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-3 px-4 py-3">
@@ -77,10 +85,39 @@ export default function PengajuanDetailPage() {
                 <p className="text-xs font-semibold text-[#1a3c5e]">{item.value}</p>
               </div>
             ))}
+
             <div className="px-4 py-3">
-              <p className="text-[11px] text-slate-400 mb-1">Alasan</p>
+              <p className="text-[11px] text-slate-400 mb-1">{isIzin || isSakit ? "Deskripsi" : "Alasan"}</p>
               <p className="text-sm text-[#1a3c5e]">{req.reason}</p>
             </div>
+
+            {/* Lampiran (Foto / Video / Link) */}
+            {(req.attachment || req.attachmentLink) && (
+              <div className="px-4 py-3">
+                <p className="text-[11px] text-slate-400 mb-1.5">Lampiran</p>
+                {req.attachmentType === "link" || req.attachmentLink ? (
+                  <a
+                    href={req.attachmentLink || req.attachment}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#1a7dc4] bg-[#e8f4fd] hover:bg-[#d8ecfa] px-3 py-2 rounded-xl border border-[#c8e2f4] transition-colors"
+                  >
+                    <Link2 size={13} />
+                    <span className="truncate max-w-[200px]">{req.attachmentLink || req.attachment}</span>
+                    <ExternalLink size={12} />
+                  </a>
+                ) : (
+                  <div className="inline-flex items-center gap-2 text-xs font-semibold text-[#1a3c5e] bg-[#f0f8ff] border border-[#c8dcea] px-3 py-2 rounded-xl">
+                    {req.attachmentType === "video" ? (
+                      <Video size={14} className="text-[#1a7dc4]" />
+                    ) : (
+                      <ImageIcon size={14} className="text-[#1a7dc4]" />
+                    )}
+                    <span>{req.attachment}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

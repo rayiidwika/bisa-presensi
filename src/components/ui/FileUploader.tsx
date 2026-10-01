@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload, X, FileText, Image } from "lucide-react";
+import { Upload, X, FileText } from "lucide-react";
 import { formatFileSize } from "@/lib/utils";
 
 interface FileUploaderProps {
@@ -40,7 +40,6 @@ export default function FileUploader({
   };
 
   const isImage = value?.type.startsWith("image/");
-  const isPDF = value?.type === "application/pdf";
 
   return (
     <div className="space-y-2">

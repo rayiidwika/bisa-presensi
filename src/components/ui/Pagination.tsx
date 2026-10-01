@@ -1,7 +1,5 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
-
 interface PaginationProps {
   currentPage: number;
   totalPages: number;

@@ -17,7 +17,15 @@ export default function PengajuanPage() {
   const [year, setYear] = useState(2026);
   const [page, setPage] = useState(1);
 
-  const filtered = useMemo(() => mockLeaveRequests, [month, year]);
+  const filtered = useMemo(() => {
+    return mockLeaveRequests.filter((r) => {
+      if (!month && !year) return true;
+      const d = new Date(r.startDate);
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const y = d.getFullYear();
+      return (!month || m === month) && (!year || y === year);
+    });
+  }, [month, year]);
   const totalPages = Math.ceil(filtered.length / ITEMS);
   const paginated = filtered.slice((page - 1) * ITEMS, page * ITEMS);
 

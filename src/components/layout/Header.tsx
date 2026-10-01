@@ -1,7 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { Bell, ChevronDown } from "lucide-react";
-import Image from "next/image";
 
 interface HeaderProps {
   title?: string;

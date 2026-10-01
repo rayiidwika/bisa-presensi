@@ -77,8 +77,12 @@ export interface LeaveRequest {
   keperluan: Keperluan;
   startDate: string;
   endDate: string;
+  startTime?: string;
+  endTime?: string;
   reason: string;
   attachment?: string;
+  attachmentType?: "photo" | "video" | "link";
+  attachmentLink?: string;
   status: RequestStatus;
   createdAt: string;
   updatedAt: string;
@@ -135,8 +139,12 @@ export interface LeaveFormData {
   keperluan: Keperluan | "";
   startDate: string;
   endDate: string;
+  startTime?: string;
+  endTime?: string;
   reason: string;
   attachment: File | null;
+  attachmentType?: "photo" | "video" | "link";
+  attachmentLink?: string;
 }
 
 export interface OvertimeFormData {

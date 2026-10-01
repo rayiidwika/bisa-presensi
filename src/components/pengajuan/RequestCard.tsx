@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Calendar, Tag } from "lucide-react";
+import { Calendar } from "lucide-react";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatDate, leaveTypeLabel } from "@/lib/utils";
 import type { LeaveRequest } from "@/types";
@@ -58,7 +58,7 @@ export default function RequestCard({ request }: RequestCardProps) {
             </div>
             {request.reason && (
               <p className="text-xs text-slate-400 mt-1 line-clamp-1 italic">
-                "{request.reason}"
+                &ldquo;{request.reason}&rdquo;
               </p>
             )}
           </div>
