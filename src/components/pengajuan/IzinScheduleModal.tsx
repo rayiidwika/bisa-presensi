@@ -205,14 +205,8 @@ export default function IzinScheduleModal({
     const formatted = to24HourStr(tempHour, tempMinute);
     if (pickerModal === "start") {
       setStartTime(formatted);
-      if (!endTime) {
-        setEndTime(to24HourStr(Math.min(23, tempHour + 4), tempMinute));
-      }
     } else if (pickerModal === "end") {
       setEndTime(formatted);
-      if (!startTime) {
-        setStartTime(to24HourStr(Math.max(0, tempHour - 4), tempMinute));
-      }
     }
     setPickerModal(null);
   };
@@ -281,9 +275,9 @@ export default function IzinScheduleModal({
   const handleSaveMain = () => {
     let s24 = "";
     let e24 = "";
-    if (isSingleDay && startTime && endTime) {
-      s24 = startTime;
-      e24 = endTime;
+    if (isSingleDay) {
+      s24 = startTime || "";
+      e24 = endTime || "";
     }
     onSave({
       startDate: startDate || todayIso,
@@ -312,9 +306,9 @@ export default function IzinScheduleModal({
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto"
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 pb-8 sm:pb-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto"
       >
-        <div className="bg-white w-full max-w-[360px] sm:max-w-[380px] rounded-[24px] sm:rounded-[28px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[86dvh] sm:max-h-[88dvh] my-auto animate-scale-up">
+        <div className="bg-white w-full max-w-[360px] sm:max-w-[380px] rounded-[24px] sm:rounded-[28px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[84dvh] sm:max-h-[86dvh] my-auto -translate-y-3 sm:translate-y-0 animate-scale-up">
           {/* Modal Header (Fixed at top) */}
           <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-slate-100 shrink-0 bg-white">
             <div className="flex items-center gap-2.5">
@@ -342,7 +336,7 @@ export default function IzinScheduleModal({
 
           {/* Modal Scrollable Content (Fluid & Smooth on Mobile) */}
           <div
-            className="px-4 py-3 sm:py-3.5 overflow-y-auto space-y-3.5 flex-1 overscroll-contain touch-pan-y"
+            className="px-4 pt-3 pb-2.5 sm:pt-3.5 sm:pb-3 overflow-y-auto space-y-3 flex-1 overscroll-contain touch-pan-y"
             style={{ WebkitOverflowScrolling: "touch" }}
           >
             {/* ══════════════ 1. PILIH TANGGAL ══════════════ */}
@@ -565,19 +559,19 @@ export default function IzinScheduleModal({
               )}
             </div>
 
-            {/* ══════════════ 3. TOMBOL AKSI (DI DALAM SCROLL SUPAYA BISA DI-SCROLL KE ATAS DI IPHONE) ══════════════ */}
-            <div className="pt-2 pb-8 flex items-center gap-2">
+            {/* ══════════════ 3. TOMBOL AKSI ══════════════ */}
+            <div className="pt-1.5 pb-2 flex items-center gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold text-xs py-3 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer shadow-2xs"
+                className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold text-xs py-2.5 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer shadow-2xs"
               >
                 Batal
               </button>
               <button
                 type="button"
                 onClick={handleSaveMain}
-                className="flex-2 bg-gradient-to-r from-[#1a7dc4] to-[#156bb8] text-white font-bold text-xs py-3 rounded-xl shadow-md shadow-[#156bb8]/25 hover:brightness-105 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                className="flex-2 bg-gradient-to-r from-[#1a7dc4] to-[#156bb8] text-white font-bold text-xs py-2.5 rounded-xl shadow-md shadow-[#156bb8]/25 hover:brightness-105 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Check size={14} strokeWidth={2.5} />
                 <span>Terapkan Jadwal</span>

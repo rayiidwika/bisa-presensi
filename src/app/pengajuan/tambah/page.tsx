@@ -30,6 +30,14 @@ const LEAVE_TYPES: { value: LeaveType; label: string }[] = [
   { value: "sakit", label: "Sakit" },
 ];
 
+const CUTI_CATEGORIES = [
+  "Cuti Menikah",
+  "Cuti Melahirkan/Keguguran",
+  "Cuti Tahunan",
+  "Cuti Sakit",
+  "Cuti Izin",
+];
+
 const KEPERLUAN_MAP: Record<LeaveType, { value: Keperluan; label: string }[]> = {
   cuti: [
     { value: "Cuti Tahunan", label: "Cuti Tahunan" },
@@ -72,6 +80,7 @@ export default function TambahPengajuanPage() {
   const router = useRouter();
   const [form, setForm] = useState<LeaveFormData>({
     type: "",
+    cutiCategory: "",
     keperluan: "",
     startDate: "",
     endDate: "",
@@ -96,6 +105,10 @@ export default function TambahPengajuanPage() {
   const validate = () => {
     const e: typeof errors = {};
     if (!form.type) e.type = "Pilih tipe pengajuan";
+
+    if (form.type === "cuti") {
+      if (!form.cutiCategory) e.cutiCategory = "Pilih kategori cuti";
+    }
 
     if (isIzin) {
       // Validasi khusus Izin
@@ -151,6 +164,7 @@ export default function TambahPengajuanPage() {
       infoHtml = `
         <div class="text-left text-sm space-y-1 mt-2">
           <p><b>Tipe:</b> ${form.type === "sakit" ? "Sakit" : "Cuti"}</p>
+          ${form.type === "cuti" && form.cutiCategory ? `<p><b>Kategori Cuti:</b> ${form.cutiCategory}</p>` : ""}
           <p><b>Durasi:</b> ${days} hari</p>
           ${lampiranHtml}
           <p class="text-gray-400 text-xs mt-1 pt-1 border-t border-slate-100">Pastikan data pengajuan sudah benar.</p>
@@ -173,12 +187,13 @@ export default function TambahPengajuanPage() {
     setForm((prev) => ({
       ...prev,
       type: newType,
+      cutiCategory: "",
       keperluan: newType === "cuti" ? "Cuti" : newType === "izin" ? "Izin Pribadi" : newType === "sakit" ? "Sakit" : "",
       attachment: null,
       attachmentLink: "",
       attachmentType: "photo",
     }));
-    setErrors((prev) => ({ ...prev, type: undefined, keperluan: undefined, startDate: undefined }));
+    setErrors({});
   };
 
   // Helper tampilan hasil pemilih jadwal izin
@@ -190,8 +205,12 @@ export default function TambahPengajuanPage() {
       : "";
 
   const formattedIzinTime =
-    form.startTime && form.endTime && form.startTime !== "--:--"
+    form.startTime && form.endTime && form.startTime !== "--:--" && form.endTime !== "--:--"
       ? `${form.startTime} – ${form.endTime} WIB`
+      : form.startTime && form.startTime !== "--:--"
+      ? `Mulai ${form.startTime} WIB`
+      : form.endTime && form.endTime !== "--:--"
+      ? `s.d ${form.endTime} WIB`
       : "";
 
   return (
@@ -244,6 +263,33 @@ export default function TambahPengajuanPage() {
               />
             </div>
           </Field>
+
+          {/* 1.b Field KATEGORI CUTI (Khusus tipe Cuti) */}
+          {form.type === "cuti" && (
+            <Field label="Kategori Cuti" error={errors.cutiCategory}>
+              <div className="relative">
+                <select
+                  className={selectCls}
+                  value={form.cutiCategory || ""}
+                  onChange={(e) => {
+                    setForm({ ...form, cutiCategory: e.target.value });
+                    setErrors({ ...errors, cutiCategory: undefined });
+                  }}
+                >
+                  <option value="">Pilih Kategori Cuti</option>
+                  {CUTI_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#3b9edd] pointer-events-none"
+                />
+              </div>
+            </Field>
+          )}
 
           {/* ══════════════ JIKA TYPE === 'IZIN' ══════════════ */}
           {isIzin ? (

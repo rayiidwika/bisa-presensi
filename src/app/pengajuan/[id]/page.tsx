@@ -69,7 +69,9 @@ export default function PengajuanDetailPage() {
           <div className="divide-y divide-slate-50">
             {[
               { icon: <FileText size={14}/>, label: "Tipe", value: leaveTypeLabel(req.type) },
-              ...(isSakit
+              ...(req.cutiCategory
+                ? [{ icon: <FileText size={14}/>, label: "Kategori Cuti", value: req.cutiCategory }]
+                : isSakit
                 ? []
                 : [{ icon: <FileText size={14}/>, label: isIzin ? "Keperluan Izin" : "Keperluan", value: req.keperluan }]),
               { icon: <Calendar size={14}/>, label: "Tanggal Mulai", value: formatDate(req.startDate) },

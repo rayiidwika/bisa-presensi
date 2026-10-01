@@ -74,6 +74,7 @@ export interface LeaveRequest {
   id: string;
   employeeId: string;
   type: LeaveType;
+  cutiCategory?: string;
   keperluan: Keperluan;
   startDate: string;
   endDate: string;
@@ -136,6 +137,7 @@ export interface OvertimeSummary {
 // ── Forms ──────────────────────────────────────────────────
 export interface LeaveFormData {
   type: LeaveType | "";
+  cutiCategory?: string;
   keperluan: Keperluan | "";
   startDate: string;
   endDate: string;
