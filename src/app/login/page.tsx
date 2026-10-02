@@ -237,6 +237,7 @@ export default function LoginPage() {
             if (count <= 0) {
               clearInterval(interval);
               setShowFaceModal(false);
+              markUserLoggedIn();
               toast.success("Login Face ID Berhasil!", {
                 description: "Selamat datang kembali, Setiawan (IT Programmer)!",
               });
@@ -266,6 +267,15 @@ export default function LoginPage() {
       stopCamera();
     };
   }, [showFaceModal]);
+
+  const markUserLoggedIn = () => {
+    try {
+      localStorage.setItem("bisa_logged_in", "true");
+      document.cookie = "bisa_logged_in=true; path=/; max-age=2592000; SameSite=Lax";
+    } catch (e) {
+      console.warn("Storage error", e);
+    }
+  };
 
   const handleStartFaceId = () => {
     setShowFaceModal(true);
@@ -302,6 +312,7 @@ export default function LoginPage() {
         if (count <= 0) {
           clearInterval(interval);
           setShowFaceModal(false);
+          markUserLoggedIn();
           toast.success("Login Face ID Berhasil!", {
             description: "Selamat datang kembali, Setiawan (IT Programmer)!",
           });
@@ -322,6 +333,7 @@ export default function LoginPage() {
   const handleProceedDashboardNow = () => {
     stopCamera();
     setShowFaceModal(false);
+    markUserLoggedIn();
     toast.success("Login Face ID Berhasil!", {
       description: "Selamat datang kembali, Setiawan (IT Programmer)!",
     });
@@ -395,6 +407,7 @@ export default function LoginPage() {
     await new Promise((r) => setTimeout(r, 1000));
     setIsLoading(false);
 
+    markUserLoggedIn();
     toast.success("Login Berhasil!", {
       description: "Selamat datang kembali, Setiawan!",
     });
@@ -489,14 +502,7 @@ export default function LoginPage() {
         <div className="w-64 h-64 rounded-full bg-cyan-300/15 blur-3xl absolute -bottom-16 -left-16 pointer-events-none" />
 
         {/* Top Header & Replay Splash Trigger */}
-        <div className="flex items-center justify-between relative z-10 pt-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-            <span className="text-[11px] font-bold text-[#1a7dc4] tracking-wide">
-              SERVER ONLINE
-            </span>
-          </div>
-
+        <div className="flex items-center justify-end relative z-10 pt-2">
           <button
             onClick={handleReplaySplash}
             title="Tampilkan Splash Animasi Lagi"

@@ -30,6 +30,7 @@ export default function HomePage() {
   const [breakEndTime, setBreakEndTime] = useState<string | null>(null);
   const [checkInNotes, setCheckInNotes] = useState<string>("");
   const [checkOutNotes, setCheckOutNotes] = useState<string>("");
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
 
   // Realtime Dates & Clock State
   const [todayCardDate, setTodayCardDate] = useState<string>("Rabu , 30 Sep 2026");
@@ -45,6 +46,18 @@ export default function HomePage() {
   ]);
 
   useEffect(() => {
+    // Check if user is logged in
+    const isLoggedIn =
+      typeof window !== "undefined" &&
+      (localStorage.getItem("bisa_logged_in") === "true" ||
+        document.cookie.includes("bisa_logged_in=true"));
+
+    if (!isLoggedIn) {
+      router.replace("/login");
+      return;
+    }
+    setIsAuthChecking(false);
+
     // Generate Realtime Dates based on current system time
     const now = new Date();
     const daysShort = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
@@ -240,6 +253,12 @@ export default function HomePage() {
           reverseButtons: true,
         }).then((res) => {
           if (res.isConfirmed) {
+            try {
+              localStorage.removeItem("bisa_logged_in");
+              document.cookie = "bisa_logged_in=; path=/; max-age=0; SameSite=Lax";
+            } catch (e) {
+              console.warn(e);
+            }
             router.push("/login");
           }
         });
@@ -320,6 +339,21 @@ export default function HomePage() {
   };
 
   const totalWorkHoursToday = calculateTotalWorkHours(checkInTime, checkOutTime);
+
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-[#071322] flex flex-col items-center justify-center select-none">
+        <div className="w-16 h-16 relative flex items-center justify-center animate-pulse mb-4">
+          <img
+            src="/app-logo.png"
+            alt="Logo Bisa Presensi"
+            className="w-14 h-14 object-contain drop-shadow-md"
+          />
+        </div>
+        <div className="w-6 h-6 border-2 border-[#1a7dc4] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#ddeef8] pb-24">
