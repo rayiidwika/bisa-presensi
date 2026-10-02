@@ -17,6 +17,7 @@ import {
   UserX,
   AlarmClock,
   MessageSquare,
+  Settings,
 } from "lucide-react";
 import Swal from "sweetalert2";
 
@@ -189,6 +190,63 @@ export default function HomePage() {
     }
   };
 
+  const handleSettingsClick = () => {
+    Swal.fire({
+      title: "Pengaturan",
+      html: `
+        <div class="text-left mt-2">
+          <div class="bg-gradient-to-r from-blue-50 to-sky-50 border border-blue-100 rounded-2xl p-4 mb-4 flex items-center gap-3">
+            <div class="w-12 h-12 rounded-full bg-[#156bb8] text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+              S
+            </div>
+            <div class="min-w-0">
+              <h4 class="font-bold text-slate-800 text-sm leading-tight">Setiawan</h4>
+              <p class="text-xs text-slate-500 font-medium mt-0.5">NIP: 2024001 • Divisi IT</p>
+              <div class="flex items-center gap-1.5 mt-1 text-[11px] text-emerald-600 font-semibold">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                <span>Akun Aktif</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-slate-50 border border-slate-100 rounded-xl p-3 mb-2 flex justify-between items-center text-xs">
+            <span class="text-slate-500 font-medium">Versi Aplikasi</span>
+            <span class="font-bold text-slate-700">v2.4.0</span>
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Keluar (Logout)",
+      confirmButtonColor: "#ef4444",
+      cancelButtonText: "Tutup",
+      cancelButtonColor: "#94a3b8",
+      reverseButtons: true,
+      customClass: {
+        popup: "rounded-3xl p-6",
+        confirmButton: "rounded-xl font-bold py-2.5 px-4 text-sm shadow-sm",
+        cancelButton: "rounded-xl font-medium py-2.5 px-4 text-sm",
+      },
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire({
+          title: "Keluar Akun?",
+          text: "Apakah Anda yakin ingin keluar dari aplikasi?",
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonText: "Ya, Keluar",
+          cancelButtonText: "Batal",
+          confirmButtonColor: "#ef4444",
+          cancelButtonColor: "#94a3b8",
+          reverseButtons: true,
+        }).then((res) => {
+          if (res.isConfirmed) {
+            router.push("/login");
+          }
+        });
+      }
+    });
+  };
+
   const rekapItems = [
     {
       day: todayRekapDate,
@@ -291,21 +349,32 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* White Notification Bell */}
-          <button
-            onClick={() =>
-              Swal.fire({
-                title: "Notifikasi",
-                text: "Tidak ada notifikasi baru saat ini.",
-                icon: "info",
-                confirmButtonColor: "#156bb8",
-              })
-            }
-            aria-label="Notifikasi"
-            className="text-white hover:opacity-90 active:scale-95 transition-all p-1.5"
-          >
-            <Bell size={24} className="fill-white text-white drop-shadow-sm" />
-          </button>
+          {/* Actions: Notification Bell & Logout */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() =>
+                Swal.fire({
+                  title: "Notifikasi",
+                  text: "Tidak ada notifikasi baru saat ini.",
+                  icon: "info",
+                  confirmButtonColor: "#156bb8",
+                })
+              }
+              aria-label="Notifikasi"
+              className="text-white hover:opacity-90 active:scale-95 transition-all p-1.5 cursor-pointer"
+            >
+              <Bell size={22} className="fill-white text-white drop-shadow-sm" />
+            </button>
+
+            <button
+              onClick={handleSettingsClick}
+              title="Pengaturan"
+              aria-label="Pengaturan"
+              className="text-white/90 hover:text-white bg-white/15 hover:bg-white/25 p-1.5 rounded-xl active:scale-95 transition-all cursor-pointer border border-white/20 flex items-center justify-center hover:rotate-45 transition-transform duration-300"
+            >
+              <Settings size={18} strokeWidth={2.2} />
+            </button>
+          </div>
         </div>
 
         {/* Greeting Text */}

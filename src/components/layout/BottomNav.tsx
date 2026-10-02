@@ -11,8 +11,9 @@ export default function BottomNav() {
   const isLembur = pathname.startsWith("/lembur");
   const isHome = pathname === "/" || (pathname.startsWith("/absensi") && !pathname.startsWith("/absensi/check-in"));
   const isCheckIn = pathname.startsWith("/absensi/check-in");
+  const isLogin = pathname.startsWith("/login");
 
-  if (isCheckIn) return null;
+  if (isCheckIn || isLogin) return null;
 
   return (
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl z-50 select-none transition-all duration-300">

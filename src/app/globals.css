@@ -60,6 +60,23 @@ html { scroll-behavior: smooth; }
   100% { transform: scale(1); opacity:1; }
 }
 
+@keyframes pulseGlow {
+  0%, 100% { filter: drop-shadow(0 0 12px rgba(59, 158, 221, 0.35)); transform: scale(1); }
+  50% { filter: drop-shadow(0 0 28px rgba(59, 158, 221, 0.75)); transform: scale(1.03); }
+}
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes auraPulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.96); }
+  50% { opacity: 0.85; transform: scale(1.08); }
+}
+
+.animate-float-slow { animation: floatSlow 3.5s ease-in-out infinite; }
+.animate-aura-pulse { animation: auraPulse 3s ease-in-out infinite; }
+.animate-pulse-glow { animation: pulseGlow 2.5s ease-in-out infinite; }
+
 .animate-slide-up  { animation: slideUp  0.35s cubic-bezier(0.34,1.56,0.64,1) forwards; }
 .animate-fade-in   { animation: fadeIn   0.25s ease-out forwards; }
 .animate-scale-in  { animation: scaleIn  0.3s  cubic-bezier(0.34,1.56,0.64,1) forwards; }
@@ -67,6 +84,7 @@ html { scroll-behavior: smooth; }
 .animate-scan      { animation: scanLine 1.8s ease-in-out infinite; }
 .animate-ripple    { animation: ripple  1.4s ease-out infinite; }
 .animate-bounce-in { animation: bounceIn 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+.animate-pulse-glow { animation: pulseGlow 2.5s ease-in-out infinite; }
 
 /* Stagger */
 .stagger > * { opacity:0; animation: slideUp 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards; }
