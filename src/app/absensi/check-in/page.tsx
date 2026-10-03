@@ -26,6 +26,9 @@ function CheckInContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const typeParam = searchParams.get("type");
+  const isLemburIn = typeParam === "lembur_in" || typeParam === "lembur";
+  const isLemburOut = typeParam === "lembur_out";
+  const isLembur = isLemburIn || isLemburOut;
   const isCheckOut = typeParam === "out";
   const isBreakEnd = typeParam === "break_end" || typeParam === "break_out";
   const isBreakStart =
@@ -36,6 +39,8 @@ function CheckInContent() {
   const isBreak = isBreakStart || isBreakEnd;
 
   const getPageTitle = () => {
+    if (isLemburOut) return "Clock Out Lembur";
+    if (isLemburIn) return "Clock In Lembur";
     if (isBreakEnd) return "Selesai Istirahat";
     if (isBreakStart) return "Clock In Istirahat";
     if (isCheckOut) return "Clock Out";
@@ -43,6 +48,8 @@ function CheckInContent() {
   };
 
   const getActionName = () => {
+    if (isLemburOut) return "Absen Keluar Lembur (Clock Out Lembur)";
+    if (isLemburIn) return "Absen Masuk Lembur (Clock In Lembur)";
     if (isBreakEnd) return "Selesai Istirahat";
     if (isBreakStart) return "Mulai Istirahat (Clock In Istirahat)";
     if (isCheckOut) return "Absen Keluar (Clock Out)";
@@ -50,6 +57,8 @@ function CheckInContent() {
   };
 
   const getButtonText = () => {
+    if (isLemburOut) return "Clock Out Lembur";
+    if (isLemburIn) return "Clock In Lembur";
     if (isBreakEnd) return "Selesai Istirahat";
     if (isBreakStart) return "Clock In Istirahat";
     if (isCheckOut) return "Clock Out";
@@ -542,7 +551,77 @@ function CheckInContent() {
     const effectiveCoords = coords || { lat: TASIK_LAT, lng: TASIK_LNG };
     const effectivePhoto = capturedImage || (isCheckOut ? "/default-checkout-scan.jpg" : "/default-face-scan.jpg");
 
-    if (isBreakEnd) {
+    if (isLemburOut) {
+      try {
+        const activeId =
+          searchParams.get("id") ||
+          localStorage.getItem("bisa_lembur_active_id") ||
+          "active_lembur";
+
+        localStorage.setItem("bisa_lembur_checkout_time", recordedTime);
+        localStorage.setItem("bisa_lembur_checkout_location", effectiveLocation);
+        localStorage.setItem("bisa_lembur_checkout_photo", effectivePhoto);
+        localStorage.setItem("bisa_lembur_checkout_notes", catatan ? catatan.trim() : "");
+        localStorage.setItem("bisa_lembur_completed", "true");
+
+        // Simpan sesi lengkap ke map riwayat lembur
+        const rawSessions = localStorage.getItem("bisa_lembur_sessions");
+        const sessions = rawSessions ? JSON.parse(rawSessions) : {};
+        const prevSession = sessions[activeId] || {};
+        sessions[activeId] = {
+          ...prevSession,
+          id: activeId,
+          checkInTime: prevSession.checkInTime || localStorage.getItem("bisa_lembur_checkin_time") || "17:30",
+          checkInLocation: prevSession.checkInLocation || localStorage.getItem("bisa_lembur_checkin_location") || effectiveLocation,
+          checkInPhoto: prevSession.checkInPhoto || localStorage.getItem("bisa_lembur_checkin_photo") || "/default-face-scan.jpg",
+          checkInNotes: prevSession.checkInNotes || localStorage.getItem("bisa_lembur_checkin_notes") || "",
+          checkOutTime: recordedTime,
+          checkOutLocation: effectiveLocation,
+          checkOutPhoto: effectivePhoto,
+          checkOutNotes: catatan ? catatan.trim() : "",
+          isCompleted: true,
+          completedAt: new Date().toISOString(),
+        };
+        localStorage.setItem("bisa_lembur_sessions", JSON.stringify(sessions));
+
+        window.dispatchEvent(new Event("bisa_lembur_change"));
+      } catch (err) {
+        console.warn("Storage quota warning", err);
+      }
+    } else if (isLemburIn) {
+      try {
+        const activeId =
+          searchParams.get("id") ||
+          localStorage.getItem("bisa_lembur_active_id") ||
+          "active_lembur";
+
+        localStorage.setItem("bisa_lembur_checkin_time", recordedTime);
+        localStorage.setItem("bisa_lembur_checkin_location", effectiveLocation);
+        localStorage.setItem("bisa_lembur_checkin_photo", effectivePhoto);
+        localStorage.setItem("bisa_lembur_checkin_notes", catatan ? catatan.trim() : "");
+        localStorage.removeItem("bisa_lembur_checkout_time");
+        localStorage.removeItem("bisa_lembur_completed");
+
+        // Simpan sesi awal check in ke map riwayat lembur
+        const rawSessions = localStorage.getItem("bisa_lembur_sessions");
+        const sessions = rawSessions ? JSON.parse(rawSessions) : {};
+        sessions[activeId] = {
+          ...(sessions[activeId] || {}),
+          id: activeId,
+          checkInTime: recordedTime,
+          checkInLocation: effectiveLocation,
+          checkInPhoto: effectivePhoto,
+          checkInNotes: catatan ? catatan.trim() : "",
+          isCompleted: false,
+          startedAt: new Date().toISOString(),
+        };
+        localStorage.setItem("bisa_lembur_sessions", JSON.stringify(sessions));
+
+        window.dispatchEvent(new Event("bisa_lembur_change"));
+      } catch (err) {
+        console.warn("Storage quota warning", err);
+      }
+    } else if (isBreakEnd) {
       currentData.breakEnd = recordedTime;
       try {
         localStorage.setItem("bisa_attendance_break_end", recordedTime);
@@ -593,32 +672,38 @@ function CheckInContent() {
       }
     }
 
-    if (catatan) {
-      currentData.notes = catatan.trim();
+    if (!isLembur) {
+      if (catatan) {
+        currentData.notes = catatan.trim();
+        try {
+          localStorage.setItem("bisa_attendance_notes", catatan.trim());
+        } catch (err) {
+          console.warn("Storage quota warning", err);
+        }
+      }
+
+      currentData.photo = effectivePhoto;
+      currentData.locationAddress = effectiveLocation;
+      currentData.coords = effectiveCoords;
+      currentData.dateStr = currentDateStr;
+
       try {
-        localStorage.setItem("bisa_attendance_notes", catatan.trim());
+        localStorage.setItem("bisa_attendance_photo", effectivePhoto);
+        localStorage.setItem("bisa_attendance_today", JSON.stringify(currentData));
       } catch (err) {
         console.warn("Storage quota warning", err);
       }
-    }
-
-    currentData.photo = effectivePhoto;
-    currentData.locationAddress = effectiveLocation;
-    currentData.coords = effectiveCoords;
-    currentData.dateStr = currentDateStr;
-
-    try {
-      localStorage.setItem("bisa_attendance_photo", effectivePhoto);
-      localStorage.setItem("bisa_attendance_today", JSON.stringify(currentData));
-    } catch (err) {
-      console.warn("Storage quota warning", err);
     }
 
     // 2. Pop-up berhasil dengan ceklist hijau (SweetAlert2) dan tombol "Keluar"
     await Swal.fire({
       icon: "success",
       iconColor: "#22c55e",
-      title: isBreakEnd
+      title: isLemburOut
+        ? "Clock Out Lembur Berhasil!"
+        : isLemburIn
+        ? "Clock In Lembur Berhasil!"
+        : isBreakEnd
         ? "Selesai Istirahat Berhasil!"
         : isBreakStart
         ? "Clock In Istirahat Berhasil!"
@@ -646,8 +731,12 @@ function CheckInContent() {
       },
     });
 
-    // 3. Masuk ke halaman Rekap Absensi di Beranda
-    router.push("/");
+    // 3. Masuk ke halaman tujuan
+    if (isLembur) {
+      router.push("/lembur");
+    } else {
+      router.push("/");
+    }
   };
 
   // Add notes dialog
@@ -665,6 +754,15 @@ function CheckInContent() {
     });
     if (text !== undefined) {
       setCatatan(text);
+    }
+  };
+
+  // Handle back navigation
+  const handleBack = () => {
+    if (isLembur) {
+      router.push("/lembur");
+    } else {
+      router.push("/");
     }
   };
 
@@ -752,9 +850,9 @@ function CheckInContent() {
             {/* ── 2. Top Bar (Overlay Translucent) ── */}
             <div className="relative z-20 pt-5 pb-6 px-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent flex items-center justify-between text-white">
               <button
-                onClick={() => router.push("/")}
+                onClick={handleBack}
                 aria-label="Kembali"
-                className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 active:scale-90 transition-all"
+                className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 active:scale-90 transition-all cursor-pointer"
               >
                 <ChevronLeft size={24} />
               </button>

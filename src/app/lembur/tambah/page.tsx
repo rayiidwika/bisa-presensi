@@ -44,6 +44,8 @@ export default function TambahLemburPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof OvertimeFormData, string>>>({});
   const [loading, setLoading] = useState(false);
 
+  const [autoApprove, setAutoApprove] = useState(true);
+
   const hours = form.startTime && form.endTime ? calcHours(form.startTime, form.endTime) : 0;
 
   const validate = () => {
@@ -61,22 +63,95 @@ export default function TambahLemburPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    const result = await showConfirm("Konfirmasi Lembur", `<div class="text-left"><p><b>Mode:</b> ${form.workMode}</p><p><b>Durasi:</b> ${hours.toFixed(1)} jam</p></div>`);
+    const result = await showConfirm(
+      "Konfirmasi Lembur",
+      `<div class="text-left space-y-1 text-xs text-slate-700">
+        <p><b>Tanggal:</b> ${form.date}</p>
+        <p><b>Mode Kerja:</b> ${form.workMode}</p>
+        <p><b>Jam Lembur:</b> ${form.startTime} - ${form.endTime} (${hours.toFixed(1)} Jam)</p>
+        <p><b>Status:</b> ${autoApprove ? "<span class='text-emerald-600 font-bold'>Langsung Disetujui (Clock In Aktif)</span>" : "<span class='text-amber-600 font-bold'>Menunggu Persetujuan Atasan</span>"}</p>
+      </div>`
+    );
     if (!result.isConfirmed) return;
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1400));
+    await new Promise((r) => setTimeout(r, 800));
 
-    addNotification({
-      type: "lembur_submitted",
-      title: "Pengajuan Lembur Terkirim",
-      message: `Pengajuan lembur Anda untuk tanggal ${form.date} (${form.startTime} - ${form.endTime} • ${hours.toFixed(1)} jam) telah terkirim dan sedang menunggu persetujuan atasan.`,
-      statusBadge: "pending",
-      meta: {
-        requestType: "lembur",
-      },
-    });
+    const newId = `OT-USR-${Date.now().toString().slice(-4)}`;
+    const newRequest = {
+      id: newId,
+      date: form.date,
+      workMode: form.workMode,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      description: form.description.trim(),
+      status: autoApprove ? "approved" : "pending",
+      totalHours: Number(hours.toFixed(1)),
+      createdAt: new Date().toISOString(),
+      approvalTimeline: autoApprove
+        ? [
+            { id: `AT-${newId}-1`, role: "Team Lead", approverName: "Budi Santoso", status: "approved", note: "Disetujui untuk lembur", timestamp: new Date().toISOString() },
+            { id: `AT-${newId}-2`, role: "HR Manager", approverName: "Siti Rahayu", status: "approved", note: "Terverifikasi sistem", timestamp: new Date().toISOString() },
+          ]
+        : [
+            { id: `AT-${newId}-1`, role: "Team Lead", approverName: "Budi Santoso", status: "waiting" },
+            { id: `AT-${newId}-2`, role: "HR Manager", approverName: "Siti Rahayu", status: "waiting" },
+          ],
+    };
 
-    toast.success("Lembur berhasil diajukan!", { description: "Menunggu persetujuan atasan." });
+    if (typeof window !== "undefined") {
+      try {
+        const existing = JSON.parse(localStorage.getItem("bisa_custom_overtime_requests") || "[]");
+        localStorage.setItem("bisa_custom_overtime_requests", JSON.stringify([newRequest, ...existing]));
+
+        if (autoApprove) {
+          localStorage.setItem("bisa_lembur_active_id", newId);
+          localStorage.removeItem("bisa_lembur_completed");
+          localStorage.removeItem("bisa_lembur_checkin_time");
+          localStorage.removeItem("bisa_lembur_checkout_time");
+
+          addNotification({
+            type: "lembur_approved",
+            title: "✅ Pengajuan Lembur Disetujui",
+            message: `Pengajuan lembur Anda untuk tanggal ${form.date} (${form.startTime} - ${form.endTime} WIB) telah disetujui. Kartu presensi Clock In & Out kini aktif.`,
+            statusBadge: "approved",
+            meta: {
+              requestType: "lembur",
+              category: `Lembur ${form.workMode}`,
+              approverName: "Budi Santoso & Siti Rahayu",
+              targetUrl: "/lembur",
+            },
+          });
+        } else {
+          addNotification({
+            type: "lembur_submitted",
+            title: "⏳ Pengajuan Lembur Terkirim",
+            message: `Pengajuan lembur Anda untuk tanggal ${form.date} (${form.startTime} - ${form.endTime} • ${hours.toFixed(1)} jam) telah terkirim dan menunggu persetujuan atasan.`,
+            statusBadge: "pending",
+            meta: {
+              requestType: "lembur",
+              category: `Lembur ${form.workMode}`,
+              targetUrl: "/lembur",
+            },
+          });
+        }
+
+        window.dispatchEvent(new Event("bisa_lembur_change"));
+        window.dispatchEvent(new Event("bisa_notification_change"));
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    if (autoApprove) {
+      toast.success("Pengajuan lembur disetujui!", {
+        description: "Presensi lembur (Clock In & Clock Out) telah aktif di halaman Lembur.",
+      });
+    } else {
+      toast.success("Lembur berhasil diajukan!", {
+        description: "Status pending di Riwayat Lembur. Anda dapat menyimulasikan persetujuan di detail lembur.",
+      });
+    }
+
     router.push("/lembur");
   };
 
@@ -88,7 +163,7 @@ export default function TambahLemburPage() {
           <button onClick={() => router.back()} className="w-8 h-8 rounded-full bg-[#e8f4fd] flex items-center justify-center active:scale-90 transition-transform">
             <svg width="15" height="15" fill="none" stroke="#1a7dc4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
-          <h1 className="text-[#1a3c5e] font-bold text-base">Lembur</h1>
+          <h1 className="text-[#1a3c5e] font-bold text-base">Ajukan Lembur Mandiri</h1>
         </div>
       </div>
 
@@ -131,13 +206,33 @@ export default function TambahLemburPage() {
           )}
 
           {/* Keterangan */}
-          <Field label="Keterangan" error={errors.description}>
-            <textarea className={`${inputCls} resize-none`} rows={3} placeholder="Tambah Keterangan" value={form.description} onChange={(e) => { setForm({ ...form, description: e.target.value }); setErrors({ ...errors, description: undefined }); }} />
+          <Field label="Keterangan Pekerjaan Lembur" error={errors.description}>
+            <textarea className={`${inputCls} resize-none`} rows={3} placeholder="Contoh: Penyelesaian deployment fitur modul analitik..." value={form.description} onChange={(e) => { setForm({ ...form, description: e.target.value }); setErrors({ ...errors, description: undefined }); }} />
           </Field>
+
+          {/* Toggle Opsi Simulasi Persetujuan Langsung */}
+          <div className="pt-2 border-t border-slate-100">
+            <label className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={autoApprove}
+                onChange={(e) => setAutoApprove(e.target.checked)}
+                className="w-4 h-4 rounded text-[#156bb8] mt-0.5 cursor-pointer accent-[#156bb8]"
+              />
+              <div className="text-xs">
+                <span className="font-bold text-emerald-800 block">
+                  Simulasikan Langsung Disetujui Atasan
+                </span>
+                <span className="text-emerald-600 text-[11px] leading-tight block mt-0.5">
+                  Jika dicentang, kartu presensi <b>Clock In & Clock Out</b> langsung aktif di halaman Lembur setelah diajukan.
+                </span>
+              </div>
+            </label>
+          </div>
         </div>
 
-        <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-[#3b9edd] to-[#1a6fb5] text-white font-bold text-sm rounded-2xl py-4 flex items-center justify-center gap-2 shadow-md shadow-blue-200 disabled:opacity-70 transition-all active:scale-[0.98]">
-          {loading ? <><Loader2 size={17} className="animate-spin" />Mengajukan...</> : "Ajukan Lembur"}
+        <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-[#3b9edd] to-[#1a6fb5] text-white font-bold text-sm rounded-2xl py-4 flex items-center justify-center gap-2 shadow-md shadow-blue-200 disabled:opacity-70 transition-all active:scale-[0.98] cursor-pointer">
+          {loading ? <><Loader2 size={17} className="animate-spin" />Memproses...</> : "Ajukan Lembur"}
         </button>
       </form>
     </div>

@@ -47,7 +47,7 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
     type: "lembur_instruction",
     title: "🚨 Instruksi Lembur dari Atasan",
     message: "Bpk. Rahmat Hidayat (Head of IT) menugaskan Anda untuk lembur maintenance database & deployment update v2.4.",
-    timestamp: "5 menit yang lalu",
+    timestamp: "Baru saja",
     createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
     isRead: false,
     statusBadge: "instruction",
@@ -67,11 +67,33 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
   {
     id: "notif-inst-02",
     type: "lembur_instruction",
+    title: "🚨 Instruksi Lembur: Patching Security & Load Balancer",
+    message: "Bpk. Hendra Gunawan (Lead DevOps) menginstruksikan lembur patching security kernel server cloud & routing balancer.",
+    timestamp: "15 menit yang lalu",
+    createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    isRead: false,
+    statusBadge: "instruction",
+    meta: {
+      requestType: "lembur",
+      category: "Perintah Lembur DevOps",
+      instructionFrom: "Bpk. Hendra Gunawan",
+      instructionRole: "Lead DevOps Engineer",
+      instructionDate: "Sabtu, 04 Oktober 2026",
+      instructionHours: "21:00 - 23:30 WIB",
+      instructionDuration: "2.5 Jam",
+      instructionTask: "Patching security kernel server cloud & konfigurasi load balancer gateway cabang.",
+      instructionStatus: "pending_acceptance",
+      targetUrl: "/lembur",
+    },
+  },
+  {
+    id: "notif-inst-03",
+    type: "lembur_instruction",
     title: "🚨 Instruksi Lembur: Backup Migrasi Cloud",
     message: "Ibu Siti Rahayu (HR & Ops Lead) menginstruksikan lembur rekapitulasi data & pendampingan tim teknis.",
-    timestamp: "1 jam yang lalu",
-    createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    isRead: false,
+    timestamp: "Kemarin, 18:00",
+    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    isRead: true,
     statusBadge: "instruction",
     meta: {
       requestType: "lembur",
@@ -87,12 +109,12 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
     },
   },
   {
-    id: "notif-inst-03",
+    id: "notif-inst-04",
     type: "lembur_instruction",
     title: "🚨 Instruksi Lembur: Penanganan Server Cabang",
     message: "Bpk. Budi Santoso (Supervisor) menugaskan lembur troubleshooting jaringan server cabang Surabaya.",
-    timestamp: "Kemarin, 19:15",
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    timestamp: "2 hari yang lalu",
+    createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
     isRead: true,
     statusBadge: "instruction",
     meta: {
@@ -105,7 +127,29 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
       instructionDuration: "3 Jam",
       instructionTask: "Remote troubleshooting switch router dan konektivitas VPN antar cabang.",
       instructionStatus: "declined",
-      declineReason: "Kondisi kesehatan kurang fit dan sedang menjalani rawat jalan pasca dinas luar kota.",
+      declineReason: "Kondisi kesehatan kurang fit dan sedang istirahat pemulihan pasca dinas luar kota.",
+      targetUrl: "/lembur",
+    },
+  },
+  {
+    id: "notif-inst-05",
+    type: "lembur_instruction",
+    title: "🚨 Instruksi Lembur: Regression Testing Mobile v2.5",
+    message: "Ibu Dian Pratiwi (QA Lead) menginstruksikan lembur validasi rilis mobile update v2.5.",
+    timestamp: "3 hari yang lalu",
+    createdAt: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
+    isRead: true,
+    statusBadge: "instruction",
+    meta: {
+      requestType: "lembur",
+      category: "Perintah Lembur QA",
+      instructionFrom: "Ibu Dian Pratiwi",
+      instructionRole: "Quality Assurance Lead",
+      instructionDate: "Rabu, 01 Oktober 2026",
+      instructionHours: "17:00 - 20:00 WIB",
+      instructionDuration: "3 Jam",
+      instructionTask: "Regression testing & validasi payment gateway sebelum release versi mobile v2.5.",
+      instructionStatus: "accepted",
       targetUrl: "/lembur",
     },
   },
@@ -114,9 +158,9 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
     type: "pengajuan_approved",
     title: "✅ Pengajuan Cuti Disetujui",
     message: "Pengajuan Cuti Tahunan Anda (28 - 29 Sep 2026 • 2 Hari) telah disetujui oleh HRD.",
-    timestamp: "2 hari yang lalu",
-    createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-    isRead: false,
+    timestamp: "4 hari yang lalu",
+    createdAt: new Date(Date.now() - 96 * 60 * 60 * 1000).toISOString(),
+    isRead: true,
     statusBadge: "approved",
     meta: {
       requestType: "cuti",
@@ -130,8 +174,8 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
     type: "pengajuan_rejected",
     title: "❌ Pengajuan Izin Ditolak",
     message: "Pengajuan Izin Keperluan Keluarga Anda pada 25 Sep 2026 ditolak oleh atasan.",
-    timestamp: "3 hari yang lalu",
-    createdAt: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
+    timestamp: "5 hari yang lalu",
+    createdAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(),
     isRead: true,
     statusBadge: "rejected",
     meta: {
@@ -147,8 +191,8 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
     type: "lembur_approved",
     title: "✅ Pengajuan Lembur Disetujui",
     message: "Pengajuan lembur mandiri Anda untuk 26 Sep 2026 (17:00 - 20:00 • 3 Jam) telah disetujui oleh Team Lead & HR.",
-    timestamp: "4 hari yang lalu",
-    createdAt: new Date(Date.now() - 96 * 60 * 60 * 1000).toISOString(),
+    timestamp: "6 hari yang lalu",
+    createdAt: new Date(Date.now() - 144 * 60 * 60 * 1000).toISOString(),
     isRead: true,
     statusBadge: "approved",
     meta: {
@@ -163,8 +207,8 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
     type: "lembur_rejected",
     title: "❌ Pengajuan Lembur Ditolak",
     message: "Pengajuan lembur Anda untuk 25 Sep 2026 (WFH • 3 Jam) tidak disetujui.",
-    timestamp: "5 hari yang lalu",
-    createdAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(),
+    timestamp: "7 hari yang lalu",
+    createdAt: new Date(Date.now() - 168 * 60 * 60 * 1000).toISOString(),
     isRead: true,
     statusBadge: "rejected",
     meta: {
@@ -180,8 +224,8 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
     type: "pengajuan_submitted",
     title: "⏳ Pengajuan Sakit Sedang Diproses",
     message: "Pengajuan Sakit Anda (20 - 21 Sep 2026 • Surat Dokter Terlampir) dalam antrean verifikasi HRD.",
-    timestamp: "6 hari yang lalu",
-    createdAt: new Date(Date.now() - 144 * 60 * 60 * 1000).toISOString(),
+    timestamp: "8 hari yang lalu",
+    createdAt: new Date(Date.now() - 192 * 60 * 60 * 1000).toISOString(),
     isRead: true,
     statusBadge: "pending",
     meta: {
@@ -192,7 +236,26 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
-const DATA_VERSION = "bisa_notif_v3";
+const DATA_VERSION = "bisa_notif_v7";
+
+/** Reset seluruh notifikasi & instruksi ke data dummy awal */
+export function resetNotificationsToDefault(): AppNotification[] {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_NOTIFICATIONS));
+      localStorage.setItem("bisa_notif_version", DATA_VERSION);
+      localStorage.removeItem("bisa_lembur_completed");
+      localStorage.removeItem("bisa_lembur_checkin_time");
+      localStorage.removeItem("bisa_lembur_checkout_time");
+      localStorage.removeItem("bisa_lembur_active_id");
+      window.dispatchEvent(new Event("bisa_notification_change"));
+      window.dispatchEvent(new Event("bisa_lembur_change"));
+    } catch (err) {
+      console.error(err);
+    }
+  }
+  return DEFAULT_NOTIFICATIONS;
+}
 
 /** Ambil seluruh daftar notifikasi dari localStorage */
 export function getNotifications(): AppNotification[] {
@@ -312,10 +375,6 @@ export function getUnreadCount(): number {
   return list.filter((n) => !n.isRead).length;
 }
 
-/** Reset ke default notifications (untuk keperluan demo & testing) */
-export function resetNotificationsToDefault() {
-  saveNotifications(DEFAULT_NOTIFICATIONS);
-}
 
 /** Tampilkan Pop-up Notifikasi menggunakan SweetAlert2 dengan filter lengkap */
 export async function showNotificationPopup() {
