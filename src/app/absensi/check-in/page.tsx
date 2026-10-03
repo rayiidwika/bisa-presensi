@@ -561,6 +561,7 @@ function CheckInContent() {
         localStorage.setItem("bisa_lembur_checkout_location", effectiveLocation);
         localStorage.setItem("bisa_lembur_checkout_photo", effectivePhoto);
         localStorage.setItem("bisa_lembur_checkout_notes", catatan ? catatan.trim() : "");
+        localStorage.setItem("bisa_lembur_checkout_coords", JSON.stringify(effectiveCoords));
         localStorage.setItem("bisa_lembur_completed", "true");
 
         // Simpan sesi lengkap ke map riwayat lembur
@@ -574,10 +575,12 @@ function CheckInContent() {
           checkInLocation: prevSession.checkInLocation || localStorage.getItem("bisa_lembur_checkin_location") || effectiveLocation,
           checkInPhoto: prevSession.checkInPhoto || localStorage.getItem("bisa_lembur_checkin_photo") || "/default-face-scan.jpg",
           checkInNotes: prevSession.checkInNotes || localStorage.getItem("bisa_lembur_checkin_notes") || "",
+          checkInCoords: prevSession.checkInCoords || { lat: TASIK_LAT, lng: TASIK_LNG },
           checkOutTime: recordedTime,
           checkOutLocation: effectiveLocation,
           checkOutPhoto: effectivePhoto,
           checkOutNotes: catatan ? catatan.trim() : "",
+          checkOutCoords: effectiveCoords,
           isCompleted: true,
           completedAt: new Date().toISOString(),
         };
@@ -598,6 +601,7 @@ function CheckInContent() {
         localStorage.setItem("bisa_lembur_checkin_location", effectiveLocation);
         localStorage.setItem("bisa_lembur_checkin_photo", effectivePhoto);
         localStorage.setItem("bisa_lembur_checkin_notes", catatan ? catatan.trim() : "");
+        localStorage.setItem("bisa_lembur_checkin_coords", JSON.stringify(effectiveCoords));
         localStorage.removeItem("bisa_lembur_checkout_time");
         localStorage.removeItem("bisa_lembur_completed");
 
@@ -611,6 +615,7 @@ function CheckInContent() {
           checkInLocation: effectiveLocation,
           checkInPhoto: effectivePhoto,
           checkInNotes: catatan ? catatan.trim() : "",
+          checkInCoords: effectiveCoords,
           isCompleted: false,
           startedAt: new Date().toISOString(),
         };

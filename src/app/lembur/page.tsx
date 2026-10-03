@@ -16,6 +16,12 @@ import {
   LogOut,
   Sparkles,
   RotateCcw,
+  MapPin,
+  Navigation,
+  ShieldCheck,
+  Maximize2,
+  Building2,
+  Coffee,
 } from "lucide-react";
 import MonthYearPicker from "@/components/ui/MonthYearPicker";
 import { mockOvertimeRequests, mockOvertimeSummary } from "@/lib/mockData";
@@ -29,6 +35,9 @@ import {
   AppNotification,
 } from "@/lib/notifications";
 import { toast } from "sonner";
+
+const TASIK_LAT = -7.3274;
+const TASIK_LNG = 108.2207;
 
 const ITEMS = 5;
 
@@ -52,6 +61,10 @@ export interface UnifiedOvertimeItem {
   checkOutPhoto?: string;
   checkInLocation?: string;
   checkOutLocation?: string;
+  checkInCoords?: { lat: number; lng: number };
+  checkOutCoords?: { lat: number; lng: number };
+  checkInNotes?: string;
+  checkOutNotes?: string;
   notes?: string;
   isCompleted?: boolean;
   approvalTimeline?: {
@@ -71,6 +84,8 @@ export default function LemburPage() {
   const [page, setPage] = useState(1);
   const [instructions, setInstructions] = useState<AppNotification[]>([]);
   const [selectedItem, setSelectedItem] = useState<UnifiedOvertimeItem | null>(null);
+  const [modalActiveTab, setModalActiveTab] = useState<"in" | "out">("in");
+  const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
 
   // Realtime Clock State
   const [realtimeClock, setRealtimeClock] = useState<string>("");
@@ -184,6 +199,37 @@ export default function LemburPage() {
   // Combined History Items (Both Responded Instructions & Self-submitted Requests)
   const allHistoryItems = useMemo<UnifiedOvertimeItem[]>(() => {
     const getSessionData = (id: string, isApproved: boolean) => {
+      // 1. If this is the active overtime session in progress (even before check in)
+      if (activeApprovedId === id) {
+        let parsedInCoords = { lat: TASIK_LAT, lng: TASIK_LNG };
+        let parsedOutCoords = { lat: TASIK_LAT, lng: TASIK_LNG };
+        try {
+          const rawInC = typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkin_coords") : null;
+          if (rawInC) parsedInCoords = JSON.parse(rawInC);
+          const rawOutC = typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkout_coords") : null;
+          if (rawOutC) parsedOutCoords = JSON.parse(rawOutC);
+        } catch (e) {}
+
+        const inNotes = typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkin_notes") || "" : "";
+        const outNotes = typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkout_notes") || "" : "";
+
+        return {
+          checkInTime: lemburCheckInTime || "",
+          checkOutTime: lemburCheckOutTime || "",
+          checkInPhoto: typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkin_photo") || "/default-face-scan.jpg" : "/default-face-scan.jpg",
+          checkOutPhoto: typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkout_photo") || "/default-checkout-scan.jpg" : "/default-checkout-scan.jpg",
+          checkInLocation: typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkin_location") || "Kantor BISA MEDIA, Tasikmalaya" : "Kantor BISA MEDIA, Tasikmalaya",
+          checkOutLocation: typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkout_location") || "Kantor BISA MEDIA, Tasikmalaya" : "Kantor BISA MEDIA, Tasikmalaya",
+          checkInCoords: parsedInCoords,
+          checkOutCoords: parsedOutCoords,
+          checkInNotes: inNotes,
+          checkOutNotes: outNotes,
+          notes: outNotes || inNotes || "",
+          isCompleted: isLemburCompleted,
+        };
+      }
+
+      // 2. Saved completed/previous sessions
       const session = lemburSessions[id];
       if (session) {
         return {
@@ -193,22 +239,16 @@ export default function LemburPage() {
           checkOutPhoto: session.checkOutPhoto || "/default-checkout-scan.jpg",
           checkInLocation: session.checkInLocation || "Kantor BISA MEDIA, Tasikmalaya",
           checkOutLocation: session.checkOutLocation || "Kantor BISA MEDIA, Tasikmalaya",
+          checkInCoords: session.checkInCoords || { lat: TASIK_LAT, lng: TASIK_LNG },
+          checkOutCoords: session.checkOutCoords || { lat: TASIK_LAT, lng: TASIK_LNG },
+          checkInNotes: session.checkInNotes || "",
+          checkOutNotes: session.checkOutNotes || "",
           notes: session.checkOutNotes || session.checkInNotes || "",
           isCompleted: session.isCompleted ?? Boolean(session.checkInTime && session.checkOutTime),
         };
       }
-      if (activeApprovedId === id && (lemburCheckInTime || lemburCheckOutTime)) {
-        return {
-          checkInTime: lemburCheckInTime,
-          checkOutTime: lemburCheckOutTime,
-          checkInPhoto: typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkin_photo") || "/default-face-scan.jpg" : "/default-face-scan.jpg",
-          checkOutPhoto: typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkout_photo") || "/default-checkout-scan.jpg" : "/default-checkout-scan.jpg",
-          checkInLocation: typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkin_location") || "Kota Tasikmalaya, Jawa Barat" : "Kota Tasikmalaya, Jawa Barat",
-          checkOutLocation: typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkout_location") || "Kota Tasikmalaya, Jawa Barat" : "Kota Tasikmalaya, Jawa Barat",
-          notes: typeof window !== "undefined" ? localStorage.getItem("bisa_lembur_checkout_notes") || localStorage.getItem("bisa_lembur_checkin_notes") || "" : "",
-          isCompleted: isLemburCompleted,
-        };
-      }
+
+      // 3. For past history default items
       if (isApproved) {
         return {
           checkInTime: "17:30",
@@ -217,6 +257,10 @@ export default function LemburPage() {
           checkOutPhoto: "/default-checkout-scan.jpg",
           checkInLocation: "Kantor BISA MEDIA, Kota Tasikmalaya",
           checkOutLocation: "Kantor BISA MEDIA, Kota Tasikmalaya",
+          checkInCoords: { lat: TASIK_LAT, lng: TASIK_LNG },
+          checkOutCoords: { lat: TASIK_LAT, lng: TASIK_LNG },
+          checkInNotes: "Check-in lembur terverifikasi biometrik di area kantor",
+          checkOutNotes: "Check-out lembur tugas selesai",
           notes: "Presensi lembur tercatat dan terverifikasi biometrik",
           isCompleted: true,
         };
@@ -615,78 +659,14 @@ export default function LemburPage() {
 
         {/* ══════════════ CARD 3: DYNAMIC ACTIVE OVERTIME AREA ══════════════ */}
         
-        {/* KASUS A: ADA PERINTAH/INSTRUKSI LEMBUR MENUNGGU PERSETUJUAN */}
-        {pendingInstructions.length > 0 ? (
-          <div className="space-y-3">
-            {pendingInstructions.map((inst) => (
-              <div
-                key={inst.id}
-                className="bg-gradient-to-b from-blue-50/70 via-white to-white rounded-3xl border border-blue-200/90 shadow-md p-4 sm:p-5 space-y-3 transition-all animate-scale-up"
-              >
-                {/* Header Card Instruksi */}
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-[#156bb8] bg-blue-100/90 border border-blue-200/80 px-2.5 py-0.5 rounded-md shadow-2xs">
-                    <span className="w-2 h-2 rounded-xs bg-[#156bb8]" />
-                    Instruksi
-                  </span>
-                  <span className="text-[10.5px] text-slate-400 font-medium">
-                    {inst.timestamp}
-                  </span>
-                </div>
-
-                {/* Judul Tugas Instruksi */}
-                <h3 className="text-sm sm:text-base font-black italic text-slate-800 leading-snug">
-                  {inst.meta?.instructionTask || inst.title}
-                </h3>
-
-                {/* Inner Gray/Blue Detail Box */}
-                <div className="p-3 rounded-2xl bg-slate-100/80 border border-slate-200/70 flex items-center justify-between text-[11px] text-slate-600 gap-2">
-                  <div className="space-y-0.5 min-w-0 flex-1">
-                    <p className="font-semibold text-slate-700 truncate">
-                      Dari : {inst.meta?.instructionFrom || "Atasan"}
-                    </p>
-                    <p className="text-slate-500 font-medium text-[10.5px]">
-                      {inst.meta?.instructionDate || "Hari ini"} - {inst.meta?.category?.includes("HR") ? "WFH" : "WFO"}
-                    </p>
-                  </div>
-                  <span className="font-black text-[#156bb8] text-xs shrink-0 tracking-tight">
-                    {inst.meta?.instructionHours || "17:30 - 21:00"}
-                  </span>
-                </div>
-
-                <div className="h-px bg-slate-200/70" />
-
-                {/* Tombol Aksi: Setuju (Hijau Lembut) & Tidak Setuju (Merah Lembut) */}
-                <div className="grid grid-cols-2 gap-3 pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => handleAccept(inst.id)}
-                    className="py-2.5 px-3 rounded-2xl bg-[#dcfce7] hover:bg-[#bbf7d0] active:bg-[#86efac] text-[#15803d] font-bold text-xs border border-[#86efac] shadow-sm transition-all cursor-pointer active:scale-95 text-center flex items-center justify-center gap-1.5"
-                  >
-                    <Check size={14} strokeWidth={2.5} />
-                    <span>Setuju (Siap Lembur)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDecline(inst.id)}
-                    className="py-2.5 px-3 rounded-2xl bg-[#fee2e2] hover:bg-[#fecaca] active:bg-[#fca5a5] text-[#b91c1c] font-bold text-xs border border-[#fca5a5] shadow-sm transition-all cursor-pointer active:scale-95 text-center flex items-center justify-center gap-1.5"
-                  >
-                    <X size={14} strokeWidth={2.5} />
-                    <span>Tidak Setuju</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : activeApprovedOvertime ? (
-          /* KASUS B: LEMBUR DISETUJUI & AKTIF (TAMPILAN REALTIME CLOCK IN & OUT) */
+        {/* KASUS A: LEMBUR DISETUJUI & AKTIF (TAMPILAN REALTIME CLOCK IN & OUT) */}
+        {activeApprovedOvertime && (
           <div className="bg-gradient-to-b from-blue-100/70 via-blue-50/40 to-white rounded-3xl border border-blue-200/80 shadow-md p-4 sm:p-5 space-y-3.5 transition-all animate-scale-up">
             {/* Baris Atas: Jam Besar Realtime & Jadwal Lembur */}
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-[34px] font-black text-slate-800 tracking-tight leading-none">
-                  {realtimeClock || "12:12"}
+                  {realtimeClock || "12:12:00"}
                 </h2>
                 <p className="text-[11px] font-semibold text-slate-500 mt-1">
                   {todayDateFormatted || "Jumat , 11 Sep 2026"}
@@ -765,6 +745,22 @@ export default function LemburPage() {
               </button>
             </div>
 
+            {/* Baris Lokasi: Menampilkan Lokasi Kantor & Geofence GPS sama seperti Login Reguler */}
+            <div className="flex items-center justify-between text-[11px] bg-white/90 border border-slate-200/80 rounded-2xl px-3 py-2 text-slate-700 shadow-2xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-6 h-6 rounded-lg bg-blue-50 border border-blue-200/70 flex items-center justify-center text-[#156bb8] shrink-0">
+                  <MapPin size={13} className="fill-blue-100" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-800 text-[11px] truncate">Kantor BISA MEDIA, Kota Tasikmalaya</p>
+                  <p className="text-[9.5px] text-slate-400">Lokasi Presensi Lembur</p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100/90 border border-emerald-200 px-2 py-0.5 rounded-md shrink-0 ml-1">
+                Radius 100m ✓
+              </span>
+            </div>
+
             {/* Baris Bawah: Status Bar / Section Bar */}
             <div className="w-full py-2 px-3 rounded-xl bg-white/90 border border-slate-200/70 text-center flex items-center justify-between text-xs font-semibold text-slate-600">
               <span className="italic text-slate-500 text-[11px] truncate">
@@ -776,7 +772,73 @@ export default function LemburPage() {
               </span>
             </div>
           </div>
-        ) : null}
+        )}
+
+        {/* KASUS B: ADA PERINTAH/INSTRUKSI LEMBUR MENUNGGU PERSETUJUAN */}
+        {pendingInstructions.length > 0 && (
+          <div className="space-y-3">
+            {pendingInstructions.map((inst) => (
+              <div
+                key={inst.id}
+                className="bg-gradient-to-b from-blue-50/70 via-white to-white rounded-3xl border border-blue-200/90 shadow-md p-4 sm:p-5 space-y-3 transition-all animate-scale-up"
+              >
+                {/* Header Card Instruksi */}
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-[#156bb8] bg-blue-100/90 border border-blue-200/80 px-2.5 py-0.5 rounded-md shadow-2xs">
+                    <span className="w-2 h-2 rounded-xs bg-[#156bb8]" />
+                    Instruksi
+                  </span>
+                  <span className="text-[10.5px] text-slate-400 font-medium">
+                    {inst.timestamp}
+                  </span>
+                </div>
+
+                {/* Judul Tugas Instruksi */}
+                <h3 className="text-sm sm:text-base font-black italic text-slate-800 leading-snug">
+                  {inst.meta?.instructionTask || inst.title}
+                </h3>
+
+                {/* Inner Gray/Blue Detail Box */}
+                <div className="p-3 rounded-2xl bg-slate-100/80 border border-slate-200/70 flex items-center justify-between text-[11px] text-slate-600 gap-2">
+                  <div className="space-y-0.5 min-w-0 flex-1">
+                    <p className="font-semibold text-slate-700 truncate">
+                      Dari : {inst.meta?.instructionFrom || "Atasan"}
+                    </p>
+                    <p className="text-slate-500 font-medium text-[10.5px]">
+                      {inst.meta?.instructionDate || "Hari ini"} - {inst.meta?.category?.includes("HR") ? "WFH" : "WFO"}
+                    </p>
+                  </div>
+                  <span className="font-black text-[#156bb8] text-xs shrink-0 tracking-tight">
+                    {inst.meta?.instructionHours || "17:30 - 21:00"}
+                  </span>
+                </div>
+
+                <div className="h-px bg-slate-200/70" />
+
+                {/* Tombol Aksi: Setuju (Hijau Lembut) & Tidak Setuju (Merah Lembut) */}
+                <div className="grid grid-cols-2 gap-3 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleAccept(inst.id)}
+                    className="py-2.5 px-3 rounded-2xl bg-[#dcfce7] hover:bg-[#bbf7d0] active:bg-[#86efac] text-[#15803d] font-bold text-xs border border-[#86efac] shadow-sm transition-all cursor-pointer active:scale-95 text-center flex items-center justify-center gap-1.5"
+                  >
+                    <Check size={14} strokeWidth={2.5} />
+                    <span>Setuju (Siap Lembur)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDecline(inst.id)}
+                    className="py-2.5 px-3 rounded-2xl bg-[#fee2e2] hover:bg-[#fecaca] active:bg-[#fca5a5] text-[#b91c1c] font-bold text-xs border border-[#fca5a5] shadow-sm transition-all cursor-pointer active:scale-95 text-center flex items-center justify-center gap-1.5"
+                  >
+                    <X size={14} strokeWidth={2.5} />
+                    <span>Tidak Setuju</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* ══════════════ CARD 4: RIWAYAT LEMBUR ══════════════ */}
         <div className="space-y-2">
@@ -803,7 +865,10 @@ export default function LemburPage() {
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => setSelectedItem(item)}
+                      onClick={() => {
+                        setModalActiveTab("in");
+                        setSelectedItem(item);
+                      }}
                       className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50/80 active:bg-blue-50/40 transition-colors group cursor-pointer"
                     >
                       {/* Sisi Kiri: Garis Warna Vertikal + Judul & Tanggal */}
@@ -866,288 +931,411 @@ export default function LemburPage() {
       </button>
 
       {/* ══════════════ POPUP MODAL DETAIL LEMBUR KETIKA DIKLIK ══════════════ */}
-      {selectedItem && (
+      {selectedItem && (() => {
+        const modalActiveCoords = modalActiveTab === "in"
+          ? selectedItem.checkInCoords || { lat: TASIK_LAT, lng: TASIK_LNG }
+          : selectedItem.checkOutCoords || { lat: TASIK_LAT, lng: TASIK_LNG };
+
+        const modalActiveLocation = modalActiveTab === "in"
+          ? selectedItem.checkInLocation || "Kantor BISA MEDIA, Kota Tasikmalaya"
+          : selectedItem.checkOutLocation || "Kantor BISA MEDIA, Kota Tasikmalaya";
+
+        const modalActivePhoto = modalActiveTab === "in"
+          ? selectedItem.checkInPhoto || "/default-face-scan.jpg"
+          : selectedItem.checkOutPhoto || "/default-checkout-scan.jpg";
+
+        const modalActiveTime = modalActiveTab === "in"
+          ? selectedItem.checkInTime || "--:--"
+          : selectedItem.checkOutTime || "--:--";
+
+        const modalActiveNotes = modalActiveTab === "in"
+          ? selectedItem.checkInNotes
+          : selectedItem.checkOutNotes;
+
+        return (
+          <div
+            onClick={() => setSelectedItem(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in select-none"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full max-w-[400px] rounded-[28px] sm:rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90dvh] animate-scale-up"
+            >
+              {/* Header Modal */}
+              <div className="px-5 pt-4 pb-3 border-b border-slate-100 bg-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center justify-center font-black text-xs px-2.5 py-0.5 rounded-lg shadow-2xs ${
+                      selectedItem.workMode === "WFO"
+                        ? "bg-blue-100 text-[#156bb8] border border-blue-200"
+                        : "bg-purple-100 text-purple-700 border border-purple-200"
+                    }`}
+                  >
+                    {selectedItem.workMode}
+                  </span>
+                  <h3 className="text-sm font-bold text-slate-800 leading-tight">
+                    Detail Riwayat Lembur
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedItem(null)}
+                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                  aria-label="Tutup"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Body Modal */}
+              <div className="px-5 py-4 overflow-y-auto space-y-3.5 flex-1 overscroll-contain">
+                {/* Status Banner */}
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                  <div>
+                    <span className="text-[10.5px] font-semibold text-slate-400 block">Kategori</span>
+                    <p className="text-xs font-bold text-slate-700 mt-0.5">
+                      {selectedItem.sourceType === "instruction" ? "🚨 Instruksi Lembur Atasan" : "✍️ Pengajuan Mandiri"}
+                    </p>
+                  </div>
+                  {/* Status Badge with dot */}
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${
+                      selectedItem.status === "approved"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : selectedItem.status === "rejected"
+                        ? "bg-rose-50 text-rose-700 border-rose-200"
+                        : "bg-amber-50 text-amber-700 border-amber-200"
+                    }`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        selectedItem.status === "approved"
+                          ? "bg-emerald-500"
+                          : selectedItem.status === "rejected"
+                          ? "bg-rose-500"
+                          : "bg-amber-500"
+                      }`}
+                    />
+                    <span>{selectedItem.statusLabel}</span>
+                  </span>
+                </div>
+
+                {/* Detail Info Card */}
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-3.5 space-y-2.5">
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Pekerjaan / Judul Lembur:
+                    </span>
+                    <p className="text-xs font-bold text-slate-800 mt-0.5 leading-snug">
+                      {selectedItem.title}
+                    </p>
+                  </div>
+
+                  <div className="h-px bg-slate-100" />
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-[10.5px] font-medium text-slate-400 block">Tanggal:</span>
+                      <span className="font-bold text-slate-700">{selectedItem.formattedDate}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10.5px] font-medium text-slate-400 block">Mode Kerja:</span>
+                      <span className="font-bold text-[#156bb8]">{selectedItem.workMode}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10.5px] font-medium text-slate-400 block">Jadwal Jam:</span>
+                      <span className="font-bold text-slate-700">{selectedItem.timeInfo}</span>
+                    </div>
+                    {selectedItem.totalHours && (
+                      <div>
+                        <span className="text-[10.5px] font-medium text-slate-400 block">Durasi:</span>
+                        <span className="font-bold text-emerald-600">{selectedItem.totalHours}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info Tambahan Instruksi Atasan */}
+                  {selectedItem.fromWho && (
+                    <div className="pt-2 border-t border-slate-100 text-xs">
+                      <span className="text-[10.5px] font-medium text-slate-400 block">Instruksi Dari:</span>
+                      <p className="font-bold text-slate-800">
+                        {selectedItem.fromWho} {selectedItem.role ? `(${selectedItem.role})` : ""}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Alasan Penolakan jika Ditolak */}
+                  {selectedItem.declineReason && (
+                    <div className="pt-2 border-t border-rose-100 text-xs text-rose-800">
+                      <span className="text-[10.5px] font-bold text-rose-600 block">Alasan Penolakan:</span>
+                      <p className="font-medium mt-0.5 leading-snug text-rose-700 bg-rose-50 p-2 rounded-xl border border-rose-200/60">
+                        {selectedItem.declineReason}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* ══════════════ DOKUMENTASI PRESENSI & VERIFIKASI LOKASI (CLOCK IN & OUT) ══════════════ */}
+                {selectedItem.status === "approved" && (
+                  <div className="space-y-3">
+                    {/* 1. TAB SWITCHER (Clock In vs Clock Out) */}
+                    <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 border border-slate-200/80 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => setModalActiveTab("in")}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          modalActiveTab === "in"
+                            ? "bg-[#156bb8] text-white shadow-sm"
+                            : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                        }`}
+                      >
+                        <LogIn
+                          size={14}
+                          strokeWidth={2.5}
+                          className={modalActiveTab === "in" ? "text-emerald-300" : "text-emerald-600"}
+                        />
+                        <div className="text-left">
+                          <p className="leading-tight text-[11px]">Clock In</p>
+                          <p className={`text-[9.5px] ${modalActiveTab === "in" ? "text-blue-100" : "text-slate-400"} font-normal`}>
+                            {selectedItem.checkInTime || "--:--"} WIB
+                          </p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setModalActiveTab("out")}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          modalActiveTab === "out"
+                            ? "bg-[#156bb8] text-white shadow-sm"
+                            : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                        }`}
+                      >
+                        <LogOut
+                          size={14}
+                          strokeWidth={2.5}
+                          className={modalActiveTab === "out" ? "text-rose-300" : "text-rose-600"}
+                        />
+                        <div className="text-left">
+                          <p className="leading-tight text-[11px]">Clock Out</p>
+                          <p className={`text-[9.5px] ${modalActiveTab === "out" ? "text-blue-100" : "text-slate-400"} font-normal`}>
+                            {selectedItem.checkOutTime || "--:--"} WIB
+                          </p>
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Label Dokumentasi */}
+                    <div className="flex items-center justify-between px-1">
+                      <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#156bb8]" />
+                        Dokumentasi {modalActiveTab === "in" ? "Clock In (Masuk)" : "Clock Out (Pulang)"}
+                      </p>
+                      <span className="text-[10px] font-semibold text-[#156bb8] bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                        {modalActiveTab === "in" ? "Foto & GPS Clock In" : "Foto & GPS Clock Out"}
+                      </span>
+                    </div>
+
+                    {/* 2. DUA KOLOM SEJAJAR: PETA REALTIME LOKASI & FOTO SCAN MUKA BIOMETRIK */}
+                    <div className="grid grid-cols-2 gap-2.5 items-stretch">
+                      {/* 1. KOTAK KIRI: REALTIME OPENSTREETMAP DENGAN GEOFENCE 100M */}
+                      <div className="relative h-36 rounded-2xl bg-white overflow-hidden border border-[#c8d8e8] shadow-2xs flex flex-col justify-between p-2 group">
+                        <div className="absolute inset-0 bg-[#e8f0f7] overflow-hidden">
+                          <iframe
+                            title={`Peta Lokasi Lembur ${modalActiveTab === "in" ? "Clock In" : "Clock Out"}`}
+                            src={`https://www.openstreetmap.org/export/embed.html?bbox=${modalActiveCoords.lng - 0.0025}%2C${modalActiveCoords.lat - 0.0018}%2C${modalActiveCoords.lng + 0.0025}%2C${modalActiveCoords.lat + 0.0018}&layer=mapnik`}
+                            className="w-full h-full border-0 pointer-events-none filter saturate-125"
+                            loading="lazy"
+                          />
+
+                          {/* Geofence 100m Aura Circle */}
+                          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                            <div className="w-20 h-20 rounded-full border-2 border-dashed border-blue-500/80 bg-blue-500/10 flex items-center justify-center">
+                              <div className="w-10 h-10 rounded-full border border-blue-400/40 bg-blue-400/15" />
+                            </div>
+                          </div>
+
+                          {/* Pin Marker Merah */}
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full flex flex-col items-center pointer-events-none z-10">
+                            <div className="w-5 h-5 rounded-full bg-red-600 border-2 border-white shadow-md flex items-center justify-center text-white">
+                              <MapPin size={11} strokeWidth={2.5} className="fill-white" />
+                            </div>
+                            <div className="w-0 h-0 border-l-[3px] border-r-[3px] border-t-[5px] border-transparent border-t-red-600 -mt-0.5" />
+                          </div>
+                        </div>
+
+                        {/* Top Pill Badge */}
+                        <div className="relative z-10 flex items-center justify-between">
+                          <span className="bg-black/70 backdrop-blur-xs text-white text-[7.5px] font-bold px-1.5 py-0.5 rounded-md shadow-xs flex items-center gap-1">
+                            <Navigation size={8} className={modalActiveTab === "in" ? "text-emerald-400" : "text-rose-400"} />
+                            <span>{modalActiveTab === "in" ? "Lokasi In" : "Lokasi Out"}</span>
+                          </span>
+                          <span className="bg-white/95 text-[#156bb8] text-[7.5px] font-bold px-1.5 py-0.5 rounded shadow-2xs">
+                            GPS 15m
+                          </span>
+                        </div>
+
+                        {/* Bottom Location Label */}
+                        <div className="relative z-10 mt-auto bg-white/95 backdrop-blur-xs px-2 py-1 rounded-lg border border-slate-200 shadow-xs">
+                          <p className="text-[7px] text-slate-500 leading-tight">Titik {modalActiveTab === "in" ? "Clock In" : "Clock Out"}:</p>
+                          <p className="text-[8.5px] font-bold text-slate-800 truncate leading-tight mt-0.5">
+                            {modalActiveLocation.split(",")[0] || "Kantor BISA MEDIA"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* 2. KOTAK KANAN: FOTO HASIL SCAN MUKA BIOMETRIK */}
+                      <div
+                        onClick={() => setPreviewPhotoModal(modalActivePhoto)}
+                        className="relative h-36 rounded-2xl bg-slate-900 overflow-hidden border border-[#c8d8e8] shadow-2xs cursor-pointer group"
+                      >
+                        <img
+                          src={modalActivePhoto}
+                          alt="Foto Dokumentasi Lembur"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 pointer-events-none" />
+                        <div className="absolute top-1.5 left-1.5 z-10">
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md shadow-sm backdrop-blur-xs flex items-center gap-1 text-white ${
+                            modalActiveTab === "in" ? "bg-emerald-600/95" : "bg-rose-600/95"
+                          }`}>
+                            <ShieldCheck size={9} />
+                            <span>{modalActiveTab === "in" ? "Scan In" : "Scan Out"}</span>
+                          </span>
+                        </div>
+                        <div className="absolute bottom-1.5 right-1.5 z-10 flex items-center gap-1 bg-black/60 px-1.5 py-0.5 rounded text-[8px] text-white">
+                          <Maximize2 size={8} />
+                          <span>{modalActiveTime} WIB</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Alamat Lengkap & Catatan Presensi */}
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 text-[11px] space-y-1">
+                      <p className="text-slate-700 leading-tight">
+                        <strong className="text-slate-900">Alamat Terverifikasi:</strong> {modalActiveLocation}
+                      </p>
+                      {modalActiveNotes && (
+                        <p className="text-slate-600 leading-tight pt-1 border-t border-slate-200/60">
+                          <strong className="text-slate-800">Catatan:</strong> {modalActiveNotes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Alur Persetujuan (khusus pengajuan mandiri jika ada) */}
+                {selectedItem.approvalTimeline && selectedItem.approvalTimeline.length > 0 && (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-3.5 space-y-2">
+                    <span className="text-[11px] font-bold text-slate-700 block">
+                      Alur Persetujuan:
+                    </span>
+                    <div className="space-y-2 mt-1">
+                      {selectedItem.approvalTimeline.map((step, idx) => (
+                        <div key={step.id || idx} className="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50 border border-slate-100/80">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                              step.status === "approved"
+                                ? "bg-emerald-100 text-emerald-600"
+                                : step.status === "rejected" || step.status === "cancelled"
+                                ? "bg-rose-100 text-rose-600"
+                                : "bg-amber-100 text-amber-600"
+                            }`}>
+                              {step.status === "approved" ? (
+                                <Check size={13} strokeWidth={2.5} />
+                              ) : step.status === "rejected" || step.status === "cancelled" ? (
+                                <X size={13} strokeWidth={2.5} />
+                              ) : (
+                                <Clock size={13} strokeWidth={2.5} />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-800 text-[11.5px] truncate">{step.approverName}</p>
+                              <p className="text-[10px] text-slate-400">{step.role}</p>
+                            </div>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                            step.status === "approved"
+                              ? "text-emerald-700 bg-emerald-50"
+                              : step.status === "rejected" || step.status === "cancelled"
+                              ? "text-rose-700 bg-rose-50"
+                              : "text-amber-700 bg-amber-50"
+                          }`}>
+                            {step.status === "approved" ? "Disetujui" : step.status === "rejected" || step.status === "cancelled" ? "Dibatalkan" : "Menunggu"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer Modal */}
+              <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/80 shrink-0 flex flex-col gap-2">
+                {selectedItem.status === "pending" && (
+                  <button
+                    type="button"
+                    onClick={() => handleApprovePendingRequest(selectedItem.id)}
+                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-md shadow-emerald-600/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                  >
+                    <Sparkles size={14} />
+                    <span>⚡ Setujui Pengajuan Ini (Munculkan Clock In & Out)</span>
+                  </button>
+                )}
+
+                {selectedItem.status === "approved" && activeApprovedId !== selectedItem.id && (
+                  <button
+                    type="button"
+                    onClick={() => handleActivateApprovedOvertime(selectedItem.id)}
+                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#1a7dc4] to-[#156bb8] text-white font-bold text-xs shadow-md shadow-blue-500/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                  >
+                    <LogIn size={14} />
+                    <span>🚀 Buka Presensi Lembur (Clock In & Out)</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedItem(null)}
+                  className="w-full py-2 px-3 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs transition-all cursor-pointer active:scale-95 text-center"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ══════════════ MODAL PREVIEW FOTO SCAN FULLSCREEN ══════════════ */}
+      {previewPhotoModal && (
         <div
-          onClick={() => setSelectedItem(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in select-none"
+          onClick={() => setPreviewPhotoModal(null)}
+          className="fixed inset-0 z-60 bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-md animate-fade-in"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white w-full max-w-[400px] rounded-[28px] sm:rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90dvh] animate-scale-up"
+            className="relative max-w-sm w-full bg-slate-900 rounded-3xl overflow-hidden border border-white/20 shadow-2xl"
           >
-            {/* Header Modal */}
-            <div className="px-5 pt-4 pb-3 border-b border-slate-100 bg-white flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex items-center justify-center font-black text-xs px-2.5 py-0.5 rounded-lg shadow-2xs ${
-                    selectedItem.workMode === "WFO"
-                      ? "bg-blue-100 text-[#156bb8] border border-blue-200"
-                      : "bg-purple-100 text-purple-700 border border-purple-200"
-                  }`}
-                >
-                  {selectedItem.workMode}
-                </span>
-                <h3 className="text-sm font-bold text-slate-800 leading-tight">
-                  Detail Riwayat Lembur
-                </h3>
-              </div>
+            <div className="p-3 border-b border-white/10 flex items-center justify-between">
+              <span className="text-white text-xs font-bold flex items-center gap-1.5">
+                <ShieldCheck size={14} className="text-emerald-400" />
+                Dokumentasi Biometrik Lembur
+              </span>
               <button
                 type="button"
-                onClick={() => setSelectedItem(null)}
-                className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 flex items-center justify-center transition-all cursor-pointer active:scale-95"
-                aria-label="Tutup"
+                onClick={() => setPreviewPhotoModal(null)}
+                className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-sm cursor-pointer"
               >
-                <X size={15} />
+                ✕
               </button>
             </div>
-
-            {/* Body Modal */}
-            <div className="px-5 py-4 overflow-y-auto space-y-3.5 flex-1 overscroll-contain">
-              {/* Status Banner */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                <div>
-                  <span className="text-[10.5px] font-semibold text-slate-400 block">Kategori</span>
-                  <p className="text-xs font-bold text-slate-700 mt-0.5">
-                    {selectedItem.sourceType === "instruction" ? "🚨 Instruksi Lembur Atasan" : "✍️ Pengajuan Mandiri"}
-                  </p>
-                </div>
-                {/* Status Badge with dot */}
-                <span
-                  className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${
-                    selectedItem.status === "approved"
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : selectedItem.status === "rejected"
-                      ? "bg-rose-50 text-rose-700 border-rose-200"
-                      : "bg-amber-50 text-amber-700 border-amber-200"
-                  }`}
-                >
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      selectedItem.status === "approved"
-                        ? "bg-emerald-500"
-                        : selectedItem.status === "rejected"
-                        ? "bg-rose-500"
-                        : "bg-amber-500"
-                    }`}
-                  />
-                  <span>{selectedItem.statusLabel}</span>
-                </span>
-              </div>
-
-              {/* Detail Info Card */}
-              <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-3.5 space-y-2.5">
-                <div>
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Pekerjaan / Judul Lembur:
-                  </span>
-                  <p className="text-xs font-bold text-slate-800 mt-0.5 leading-snug">
-                    {selectedItem.title}
-                  </p>
-                </div>
-
-                <div className="h-px bg-slate-100" />
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-[10.5px] font-medium text-slate-400 block">Tanggal:</span>
-                    <span className="font-bold text-slate-700">{selectedItem.formattedDate}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10.5px] font-medium text-slate-400 block">Mode Kerja:</span>
-                    <span className="font-bold text-[#156bb8]">{selectedItem.workMode}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10.5px] font-medium text-slate-400 block">Waktu:</span>
-                    <span className="font-bold text-slate-700">{selectedItem.timeInfo}</span>
-                  </div>
-                  {selectedItem.totalHours && (
-                    <div>
-                      <span className="text-[10.5px] font-medium text-slate-400 block">Durasi:</span>
-                      <span className="font-bold text-emerald-600">{selectedItem.totalHours}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Info Tambahan Instruksi Atasan */}
-                {selectedItem.fromWho && (
-                  <div className="pt-2 border-t border-slate-100 text-xs">
-                    <span className="text-[10.5px] font-medium text-slate-400 block">Instruksi Dari:</span>
-                    <p className="font-bold text-slate-800">
-                      {selectedItem.fromWho} {selectedItem.role ? `(${selectedItem.role})` : ""}
-                    </p>
-                  </div>
-                )}
-
-                {/* Alasan Penolakan jika Ditolak */}
-                {selectedItem.declineReason && (
-                  <div className="pt-2 border-t border-rose-100 text-xs text-rose-800">
-                    <span className="text-[10.5px] font-bold text-rose-600 block">Alasan Penolakan:</span>
-                    <p className="font-medium mt-0.5 leading-snug text-rose-700 bg-rose-50 p-2 rounded-xl border border-rose-200/60">
-                      {selectedItem.declineReason}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Bukti Presensi & Realisasi Lembur (Clock In & Out) */}
-              {selectedItem.status === "approved" && (
-                <div className="rounded-2xl border border-emerald-200/90 bg-gradient-to-b from-emerald-50/70 to-white p-3.5 space-y-3 shadow-2xs">
-                  <div className="flex items-center justify-between border-b border-emerald-100 pb-2">
-                    <span className="text-[11.5px] font-bold text-emerald-800 flex items-center gap-1.5">
-                      <Sparkles size={13} className="text-emerald-600" />
-                      Bukti Presensi & Verifikasi Wajah
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-200">
-                      ● Terverifikasi GPS & Wajah
-                    </span>
-                  </div>
-
-                  {/* 2 Kolom Foto & Waktu: Clock In & Clock Out */}
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {/* Kolom 1: Clock In */}
-                    <div className="bg-white rounded-xl p-2.5 border border-slate-200/80 shadow-2xs space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-[#156bb8] bg-blue-50 px-1.5 py-0.5 rounded">
-                          Clock In
-                        </span>
-                        <span className="text-[11px] font-black text-slate-800">
-                          {selectedItem.checkInTime || "--:--"}
-                        </span>
-                      </div>
-
-                      {/* Foto Selfie Scan Wajah Masuk */}
-                      <div className="relative aspect-3/4 rounded-lg overflow-hidden bg-slate-100 border border-slate-200/80">
-                        <img
-                          src={selectedItem.checkInPhoto || "/default-face-scan.jpg"}
-                          alt="Foto Clock In"
-                          className="w-full h-full object-cover"
-                        />
-                        <span className="absolute bottom-1 right-1 bg-black/60 text-[8.5px] font-semibold text-white px-1.5 py-0.5 rounded backdrop-blur-xs">
-                          {selectedItem.checkInTime || "17:30"} WIB
-                        </span>
-                      </div>
-
-                      <div className="text-[10px] text-slate-500 leading-tight">
-                        <span className="font-semibold text-slate-700 block truncate">📍 {selectedItem.checkInLocation || "Kantor BISA MEDIA, Tasikmalaya"}</span>
-                      </div>
-                    </div>
-
-                    {/* Kolom 2: Clock Out */}
-                    <div className="bg-white rounded-xl p-2.5 border border-slate-200/80 shadow-2xs space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">
-                          Clock Out
-                        </span>
-                        <span className="text-[11px] font-black text-slate-800">
-                          {selectedItem.checkOutTime || "--:--"}
-                        </span>
-                      </div>
-
-                      {/* Foto Selfie Scan Wajah Keluar */}
-                      <div className="relative aspect-3/4 rounded-lg overflow-hidden bg-slate-100 border border-slate-200/80">
-                        <img
-                          src={selectedItem.checkOutPhoto || "/default-checkout-scan.jpg"}
-                          alt="Foto Clock Out"
-                          className="w-full h-full object-cover"
-                        />
-                        <span className="absolute bottom-1 right-1 bg-black/60 text-[8.5px] font-semibold text-white px-1.5 py-0.5 rounded backdrop-blur-xs">
-                          {selectedItem.checkOutTime || "21:00"} WIB
-                        </span>
-                      </div>
-
-                      <div className="text-[10px] text-slate-500 leading-tight">
-                        <span className="font-semibold text-slate-700 block truncate">📍 {selectedItem.checkOutLocation || "Kantor BISA MEDIA, Tasikmalaya"}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Catatan Presensi jika ada */}
-                  {selectedItem.notes && (
-                    <div className="bg-slate-50 rounded-xl p-2 border border-slate-200/60 text-xs">
-                      <span className="text-[10px] font-bold text-slate-400 block">Catatan Presensi:</span>
-                      <p className="text-slate-700 font-medium text-[11px] mt-0.5">{selectedItem.notes}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Alur Persetujuan (khusus pengajuan mandiri jika ada) */}
-              {selectedItem.approvalTimeline && selectedItem.approvalTimeline.length > 0 && (
-                <div className="rounded-2xl border border-slate-100 bg-white p-3.5 space-y-2">
-                  <span className="text-[11px] font-bold text-slate-700 block">
-                    Alur Persetujuan:
-                  </span>
-                  <div className="space-y-2 mt-1">
-                    {selectedItem.approvalTimeline.map((step, idx) => (
-                      <div key={step.id || idx} className="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50 border border-slate-100/80">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
-                            step.status === "approved"
-                              ? "bg-emerald-100 text-emerald-600"
-                              : step.status === "rejected" || step.status === "cancelled"
-                              ? "bg-rose-100 text-rose-600"
-                              : "bg-amber-100 text-amber-600"
-                          }`}>
-                            {step.status === "approved" ? (
-                              <Check size={13} strokeWidth={2.5} />
-                            ) : step.status === "rejected" || step.status === "cancelled" ? (
-                              <X size={13} strokeWidth={2.5} />
-                            ) : (
-                              <Clock size={13} strokeWidth={2.5} />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-bold text-slate-800 text-[11.5px] truncate">{step.approverName}</p>
-                            <p className="text-[10px] text-slate-400">{step.role}</p>
-                          </div>
-                        </div>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                          step.status === "approved"
-                            ? "text-emerald-700 bg-emerald-50"
-                            : step.status === "rejected" || step.status === "cancelled"
-                            ? "text-rose-700 bg-rose-50"
-                            : "text-amber-700 bg-amber-50"
-                        }`}>
-                          {step.status === "approved" ? "Disetujui" : step.status === "rejected" || step.status === "cancelled" ? "Dibatalkan" : "Menunggu"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Footer Modal */}
-            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/80 shrink-0 flex flex-col gap-2">
-              {selectedItem.status === "pending" && (
-                <button
-                  type="button"
-                  onClick={() => handleApprovePendingRequest(selectedItem.id)}
-                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-md shadow-emerald-600/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                >
-                  <Sparkles size={14} />
-                  <span>⚡ Setujui Pengajuan Ini (Munculkan Clock In & Out)</span>
-                </button>
-              )}
-
-              {selectedItem.status === "approved" && activeApprovedId !== selectedItem.id && (
-                <button
-                  type="button"
-                  onClick={() => handleActivateApprovedOvertime(selectedItem.id)}
-                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#1a7dc4] to-[#156bb8] text-white font-bold text-xs shadow-md shadow-blue-500/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                >
-                  <LogIn size={14} />
-                  <span>🚀 Buka Presensi Lembur (Clock In & Out)</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setSelectedItem(null)}
-                className="w-full py-2 px-3 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs transition-all cursor-pointer active:scale-95 text-center"
-              >
-                Tutup
-              </button>
+            <div className="p-3">
+              <img
+                src={previewPhotoModal}
+                alt="Preview Dokumentasi"
+                className="w-full rounded-2xl object-cover max-h-[65vh]"
+              />
             </div>
           </div>
         </div>

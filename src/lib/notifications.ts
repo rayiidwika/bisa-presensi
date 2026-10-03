@@ -442,6 +442,12 @@ export function acceptLemburInstruction(id: string) {
       localStorage.removeItem("bisa_lembur_completed");
       localStorage.removeItem("bisa_lembur_checkin_time");
       localStorage.removeItem("bisa_lembur_checkout_time");
+      localStorage.removeItem("bisa_lembur_checkin_photo");
+      localStorage.removeItem("bisa_lembur_checkout_photo");
+      localStorage.removeItem("bisa_lembur_checkin_location");
+      localStorage.removeItem("bisa_lembur_checkout_location");
+      localStorage.removeItem("bisa_lembur_checkin_notes");
+      localStorage.removeItem("bisa_lembur_checkout_notes");
       window.dispatchEvent(new Event("bisa_lembur_change"));
     } catch (err) {
       console.error(err);
