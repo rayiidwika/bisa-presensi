@@ -42,10 +42,11 @@ export interface AppNotification {
 const STORAGE_KEY = "bisa_notifications";
 
 export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
+  // ── 1. Pending Instructions (Siap Dikonfirmasi oleh Karyawan) ──
   {
     id: "notif-inst-01",
     type: "lembur_instruction",
-    title: "🚨 Instruksi Lembur dari Atasan",
+    title: "🚨 Instruksi Lembur: Maintenance Database & Deployment v2.4",
     message: "Bpk. Rahmat Hidayat (Head of IT) menugaskan Anda untuk lembur maintenance database & deployment update v2.4.",
     timestamp: "Baru saja",
     createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
@@ -67,7 +68,7 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
   {
     id: "notif-inst-02",
     type: "lembur_instruction",
-    title: "🚨 Instruksi Lembur: Patching Security & Load Balancer",
+    title: "🚨 Instruksi Lembur: Patching Security Kernel & Load Balancer",
     message: "Bpk. Hendra Gunawan (Lead DevOps) menginstruksikan lembur patching security kernel server cloud & routing balancer.",
     timestamp: "15 menit yang lalu",
     createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
@@ -89,6 +90,30 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
   {
     id: "notif-inst-03",
     type: "lembur_instruction",
+    title: "🚨 Instruksi Lembur: Finalisasi Migrasi Data & Audit QA",
+    message: "Ibu Dian Pratiwi (QA Lead) menginstruksikan lembur audit validasi integrasi pembayaran dan migrasi data.",
+    timestamp: "1 jam yang lalu",
+    createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    isRead: false,
+    statusBadge: "instruction",
+    meta: {
+      requestType: "lembur",
+      category: "Perintah Lembur QA",
+      instructionFrom: "Ibu Dian Pratiwi",
+      instructionRole: "Quality Assurance Lead",
+      instructionDate: "Minggu, 05 Oktober 2026",
+      instructionHours: "13:00 - 16:30 WIB",
+      instructionDuration: "3.5 Jam",
+      instructionTask: "Audit menyeluruh endpoint payment gateway dan migrasi rekap data presensi karyawan cabang.",
+      instructionStatus: "pending_acceptance",
+      targetUrl: "/lembur",
+    },
+  },
+
+  // ── 2. Responded Instructions (Disetujui & Masuk Riwayat) ──
+  {
+    id: "notif-inst-04",
+    type: "lembur_instruction",
     title: "🚨 Instruksi Lembur: Backup Migrasi Cloud",
     message: "Ibu Siti Rahayu (HR & Ops Lead) menginstruksikan lembur rekapitulasi data & pendampingan tim teknis.",
     timestamp: "Kemarin, 18:00",
@@ -105,29 +130,6 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
       instructionDuration: "2.5 Jam",
       instructionTask: "Verifikasi berkas laporan lembur bulanan dan pendampingan migrasi database ke private cloud.",
       instructionStatus: "accepted",
-      targetUrl: "/lembur",
-    },
-  },
-  {
-    id: "notif-inst-04",
-    type: "lembur_instruction",
-    title: "🚨 Instruksi Lembur: Penanganan Server Cabang",
-    message: "Bpk. Budi Santoso (Supervisor) menugaskan lembur troubleshooting jaringan server cabang Surabaya.",
-    timestamp: "2 hari yang lalu",
-    createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
-    statusBadge: "instruction",
-    meta: {
-      requestType: "lembur",
-      category: "Perintah Lembur Atasan",
-      instructionFrom: "Bpk. Budi Santoso",
-      instructionRole: "Technical Supervisor",
-      instructionDate: "Kamis, 02 Oktober 2026",
-      instructionHours: "19:00 - 22:00 WIB",
-      instructionDuration: "3 Jam",
-      instructionTask: "Remote troubleshooting switch router dan konektivitas VPN antar cabang.",
-      instructionStatus: "declined",
-      declineReason: "Kondisi kesehatan kurang fit dan sedang istirahat pemulihan pasca dinas luar kota.",
       targetUrl: "/lembur",
     },
   },
@@ -154,35 +156,90 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
     },
   },
   {
+    id: "notif-inst-06",
+    type: "lembur_instruction",
+    title: "🚨 Instruksi Lembur: Monitoring Server Deployment Cabang",
+    message: "Bpk. Rahmat Hidayat (Head of IT) menugaskan lembur monitoring live deployment server cabang.",
+    timestamp: "4 hari yang lalu",
+    createdAt: new Date(Date.now() - 96 * 60 * 60 * 1000).toISOString(),
+    isRead: true,
+    statusBadge: "instruction",
+    meta: {
+      requestType: "lembur",
+      category: "Perintah Lembur IT",
+      instructionFrom: "Bpk. Rahmat Hidayat",
+      instructionRole: "Head of IT & Infrastructure",
+      instructionDate: "Selasa, 30 September 2026",
+      instructionHours: "19:00 - 22:00 WIB",
+      instructionDuration: "3 Jam",
+      instructionTask: "Monitoring sinkronisasi data presensi biometrik pada server cabang baru.",
+      instructionStatus: "accepted",
+      targetUrl: "/lembur",
+    },
+  },
+
+  // ── 3. Declined Instructions (Ditolak beserta Alasan) ──
+  {
+    id: "notif-inst-07",
+    type: "lembur_instruction",
+    title: "🚨 Instruksi Lembur: Penanganan Server Cabang",
+    message: "Bpk. Budi Santoso (Supervisor) menugaskan lembur troubleshooting jaringan server cabang Surabaya.",
+    timestamp: "2 hari yang lalu",
+    createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+    isRead: true,
+    statusBadge: "instruction",
+    meta: {
+      requestType: "lembur",
+      category: "Perintah Lembur Atasan",
+      instructionFrom: "Bpk. Budi Santoso",
+      instructionRole: "Technical Supervisor",
+      instructionDate: "Kamis, 02 Oktober 2026",
+      instructionHours: "19:00 - 22:00 WIB",
+      instructionDuration: "3 Jam",
+      instructionTask: "Remote troubleshooting switch router dan konektivitas VPN antar cabang.",
+      instructionStatus: "declined",
+      declineReason: "Kondisi kesehatan kurang fit dan sedang istirahat pemulihan pasca dinas luar kota.",
+      targetUrl: "/lembur",
+    },
+  },
+  {
+    id: "notif-inst-08",
+    type: "lembur_instruction",
+    title: "🚨 Instruksi Lembur: Rekapitulasi Berkas Fisik HR & Payroll",
+    message: "Ibu Siti Rahayu (HR Manager) menugaskan lembur audit dokumen fisik berkas karyawan.",
+    timestamp: "5 hari yang lalu",
+    createdAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(),
+    isRead: true,
+    statusBadge: "instruction",
+    meta: {
+      requestType: "lembur",
+      category: "Perintah Lembur HR",
+      instructionFrom: "Ibu Siti Rahayu",
+      instructionRole: "HR Manager",
+      instructionDate: "Senin, 29 September 2026",
+      instructionHours: "18:00 - 20:00 WIB",
+      instructionDuration: "2 Jam",
+      instructionTask: "Audit dan verifikasi manual berkas fisik payroll serta tanda tangan kontrak.",
+      instructionStatus: "declined",
+      declineReason: "Ada keperluan keluarga mendesak yang telah dijadwalkan sebelumnya dan tidak bisa digeser.",
+      targetUrl: "/lembur",
+    },
+  },
+
+  // ── 4. Pengajuan Cuti, Izin, Sakit & Lembur Mandiri ──
+  {
     id: "notif-apr-01",
     type: "pengajuan_approved",
     title: "✅ Pengajuan Cuti Disetujui",
     message: "Pengajuan Cuti Tahunan Anda (28 - 29 Sep 2026 • 2 Hari) telah disetujui oleh HRD.",
-    timestamp: "4 hari yang lalu",
-    createdAt: new Date(Date.now() - 96 * 60 * 60 * 1000).toISOString(),
+    timestamp: "5 hari yang lalu",
+    createdAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(),
     isRead: true,
     statusBadge: "approved",
     meta: {
       requestType: "cuti",
       category: "Cuti Tahunan",
       approverName: "Siti Rahayu (HR Manager)",
-      targetUrl: "/pengajuan",
-    },
-  },
-  {
-    id: "notif-rej-01",
-    type: "pengajuan_rejected",
-    title: "❌ Pengajuan Izin Ditolak",
-    message: "Pengajuan Izin Keperluan Keluarga Anda pada 25 Sep 2026 ditolak oleh atasan.",
-    timestamp: "5 hari yang lalu",
-    createdAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
-    statusBadge: "rejected",
-    meta: {
-      requestType: "izin",
-      category: "Izin Keperluan Keluarga",
-      approverName: "Budi Santoso (Team Lead)",
-      rejectedReason: "Kuota izin berbayar bulan ini sudah habis. Silakan ajukan menggunakan kompensasi lembur atau cuti tahunan.",
       targetUrl: "/pengajuan",
     },
   },
@@ -203,12 +260,29 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
     },
   },
   {
+    id: "notif-rej-01",
+    type: "pengajuan_rejected",
+    title: "❌ Pengajuan Izin Ditolak",
+    message: "Pengajuan Izin Keperluan Keluarga Anda pada 25 Sep 2026 ditolak oleh atasan.",
+    timestamp: "7 hari yang lalu",
+    createdAt: new Date(Date.now() - 168 * 60 * 60 * 1000).toISOString(),
+    isRead: true,
+    statusBadge: "rejected",
+    meta: {
+      requestType: "izin",
+      category: "Izin Keperluan Keluarga",
+      approverName: "Budi Santoso (Team Lead)",
+      rejectedReason: "Kuota izin berbayar bulan ini sudah habis. Silakan ajukan menggunakan kompensasi lembur atau cuti tahunan.",
+      targetUrl: "/pengajuan",
+    },
+  },
+  {
     id: "notif-rej-02",
     type: "lembur_rejected",
     title: "❌ Pengajuan Lembur Ditolak",
     message: "Pengajuan lembur Anda untuk 25 Sep 2026 (WFH • 3 Jam) tidak disetujui.",
     timestamp: "7 hari yang lalu",
-    createdAt: new Date(Date.now() - 168 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 172 * 60 * 60 * 1000).toISOString(),
     isRead: true,
     statusBadge: "rejected",
     meta: {
@@ -234,9 +308,24 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
       targetUrl: "/pengajuan",
     },
   },
+  {
+    id: "notif-sub-02",
+    type: "pengajuan_submitted",
+    title: "⏳ Pengajuan Lembur Menunggu Verifikasi",
+    message: "Pengajuan Lembur Anda (24 Sep 2026 • Integrasi API Payment) sedang dalam antrean review Team Lead.",
+    timestamp: "9 hari yang lalu",
+    createdAt: new Date(Date.now() - 216 * 60 * 60 * 1000).toISOString(),
+    isRead: true,
+    statusBadge: "pending",
+    meta: {
+      requestType: "lembur",
+      category: "Lembur Integrasi API",
+      targetUrl: "/lembur",
+    },
+  },
 ];
 
-const DATA_VERSION = "bisa_notif_v7";
+const DATA_VERSION = "bisa_notif_v8";
 
 /** Reset seluruh notifikasi & instruksi ke data dummy awal */
 export function resetNotificationsToDefault(): AppNotification[] {
@@ -347,6 +436,17 @@ export function acceptLemburInstruction(id: string) {
     return n;
   });
   saveNotifications(updated);
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("bisa_lembur_active_id", id);
+      localStorage.removeItem("bisa_lembur_completed");
+      localStorage.removeItem("bisa_lembur_checkin_time");
+      localStorage.removeItem("bisa_lembur_checkout_time");
+      window.dispatchEvent(new Event("bisa_lembur_change"));
+    } catch (err) {
+      console.error(err);
+    }
+  }
 }
 
 /** Konfirmasi penolakan instruksi lembur dari atasan beserta alasannya */
@@ -650,31 +750,35 @@ export async function showNotificationPopup() {
         // Accept Overtime Buttons
         const acceptBtns = document.querySelectorAll(".btn-accept-lembur");
         acceptBtns.forEach((btn) => {
-          btn.addEventListener("click", (e) => {
+          btn.addEventListener("click", async (e) => {
             e.stopPropagation();
             const target = e.currentTarget as HTMLElement;
             const id = target.getAttribute("data-id");
             if (id) {
               acceptLemburInstruction(id);
-              notifs = getNotifications();
-              const contentEl = Swal.getHtmlContainer();
-              if (contentEl) {
-                contentEl.innerHTML = renderContent();
-                attachListeners();
-              }
-              Swal.fire({
-                title: "Lembur Disetujui!",
-                text: "Kesiapan lembur Anda telah terkonfirmasi dan dilaporkan ke Atasan & HR.",
+              Swal.close();
+
+              await Swal.fire({
+                title: "Instruksi Lembur Disetujui!",
+                html: `
+                  <div class="text-center text-slate-600 text-xs mt-1.5 space-y-1.5">
+                    <p class="font-bold text-slate-800 text-sm">Siap Melaksanakan Lembur</p>
+                    <p>Kesiapan lembur Anda telah terkonfirmasi. Anda akan langsung dialihkan ke halaman Lembur untuk melakukan <b>Clock In Presensi</b>.</p>
+                  </div>
+                `,
                 icon: "success",
+                iconColor: "#22c55e",
                 confirmButtonColor: "#156bb8",
-                confirmButtonText: "Kembali ke Notifikasi",
+                confirmButtonText: "Buka Presensi Lembur",
+                timer: 1600,
+                timerProgressBar: true,
+                showConfirmButton: false,
                 customClass: {
                   popup: "!w-[92vw] sm:!w-[400px] !max-w-[400px] rounded-3xl p-5 shadow-2xl",
-                  confirmButton: "rounded-xl font-bold py-2 px-5 text-xs shadow-sm",
                 },
-              }).then(() => {
-                showNotificationPopup();
               });
+
+              window.location.href = "/lembur";
             }
           });
         });
@@ -753,7 +857,7 @@ export async function showNotificationPopup() {
           });
         });
 
-        // Mark single card as read on click
+        // Mark single card as read on click and navigate if applicable
         const cards = document.querySelectorAll(".notif-card");
         cards.forEach((card) => {
           card.addEventListener("click", (e) => {
@@ -761,14 +865,26 @@ export async function showNotificationPopup() {
             const id = target.getAttribute("data-id");
             if (id) {
               const item = notifs.find((n) => n.id === id);
-              if (item && !item.isRead) {
-                markAsRead(id);
-                item.isRead = true;
-                const contentEl = Swal.getHtmlContainer();
-                if (contentEl) {
-                  contentEl.innerHTML = renderContent();
-                  attachListeners();
+              if (item) {
+                if (!item.isRead) {
+                  markAsRead(id);
+                  item.isRead = true;
                 }
+                if (item.type === "lembur_instruction" && item.meta?.instructionStatus === "accepted") {
+                  Swal.close();
+                  window.location.href = "/lembur";
+                  return;
+                }
+                if (item.type === "lembur_approved") {
+                  Swal.close();
+                  window.location.href = "/lembur";
+                  return;
+                }
+              }
+              const contentEl = Swal.getHtmlContainer();
+              if (contentEl) {
+                contentEl.innerHTML = renderContent();
+                attachListeners();
               }
             }
           });

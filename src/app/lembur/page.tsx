@@ -130,12 +130,13 @@ export default function LemburPage() {
     loadCustomRequests();
     loadAttendanceState();
 
-    // Realtime clock
+    // Realtime clock with seconds
     const updateClock = () => {
       const now = new Date();
       const h = String(now.getHours()).padStart(2, "0");
       const m = String(now.getMinutes()).padStart(2, "0");
-      setRealtimeClock(`${h}:${m}`);
+      const s = String(now.getSeconds()).padStart(2, "0");
+      setRealtimeClock(`${h}:${m}:${s}`);
 
       const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
       const months = [
@@ -420,25 +421,32 @@ export default function LemburPage() {
     router.push(`/absensi/check-in?type=lembur_out&id=${activeApprovedId || ""}`);
   };
 
-  // Calculate Real-time Overtime Duration (Jam & Menit)
+  // Calculate Real-time Overtime Duration (Jam, Menit & Detik)
   const calculateDuration = (): string => {
-    if (!lemburCheckInTime) return "0 Jam 0 Menit";
-    const [inH, inM] = lemburCheckInTime.split(":").map(Number);
-    const inTotal = inH * 60 + inM;
+    if (!lemburCheckInTime) return "0 Jam 0 Menit 0 Detik";
+    const inParts = lemburCheckInTime.split(":").map(Number);
+    const inH = inParts[0] || 0;
+    const inM = inParts[1] || 0;
+    const inS = inParts[2] || 0;
+    const inTotalSec = inH * 3600 + inM * 60 + inS;
 
-    let outTotal = inTotal;
+    let outTotalSec = inTotalSec;
     if (lemburCheckOutTime) {
-      const [outH, outM] = lemburCheckOutTime.split(":").map(Number);
-      outTotal = outH * 60 + outM;
+      const outParts = lemburCheckOutTime.split(":").map(Number);
+      const outH = outParts[0] || 0;
+      const outM = outParts[1] || 0;
+      const outS = outParts[2] || 0;
+      outTotalSec = outH * 3600 + outM * 60 + outS;
     } else {
       const now = new Date();
-      outTotal = now.getHours() * 60 + now.getMinutes();
+      outTotalSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
     }
 
-    const diff = Math.max(0, outTotal - inTotal);
-    const h = Math.floor(diff / 60);
-    const m = diff % 60;
-    return `${h} Jam ${m} Menit`;
+    const diffSec = Math.max(0, outTotalSec - inTotalSec);
+    const h = Math.floor(diffSec / 3600);
+    const m = Math.floor((diffSec % 3600) / 60);
+    const s = diffSec % 60;
+    return `${h} Jam ${m} Menit ${s} Detik`;
   };
 
   // Handle Approve a Pending Overtime Request (Simulation / Atasan Menyetujui)

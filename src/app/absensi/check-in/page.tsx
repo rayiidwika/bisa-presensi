@@ -135,19 +135,18 @@ function CheckInContent() {
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
+      const h = String(now.getHours()).padStart(2, "0");
+      const m = String(now.getMinutes()).padStart(2, "0");
+      const s = String(now.getSeconds()).padStart(2, "0");
       setCurrentTimeStr(
         now.toLocaleTimeString("en-US", {
           hour: "2-digit",
           minute: "2-digit",
+          second: "2-digit",
           hour12: true,
         })
       );
-      setCurrentTimeShort(
-        now.toLocaleTimeString("id-ID", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }).replace(".", ":")
-      );
+      setCurrentTimeShort(`${h}:${m}:${s}`);
       setCurrentDateStr(
         now.toLocaleDateString("id-ID", {
           weekday: "short",
