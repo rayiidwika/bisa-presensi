@@ -5,6 +5,7 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { OvertimeFormData, WorkMode } from "@/types";
 import { calcHours } from "@/lib/utils";
+import { addNotification } from "@/lib/notifications";
 
 async function showConfirm(title: string, html: string) {
   const Swal = (await import("sweetalert2")).default;
@@ -16,6 +17,11 @@ async function showConfirm(title: string, html: string) {
     confirmButtonColor: "#1a7dc4",
     cancelButtonColor: "#94a3b8",
     reverseButtons: true,
+    customClass: {
+      popup: "!w-[92vw] sm:!w-[420px] !max-w-[420px] rounded-3xl p-6 shadow-2xl",
+      confirmButton: "rounded-xl font-bold py-2.5 px-5 text-sm shadow-sm",
+      cancelButton: "rounded-xl font-medium py-2.5 px-4 text-sm",
+    },
   });
 }
 
@@ -59,6 +65,17 @@ export default function TambahLemburPage() {
     if (!result.isConfirmed) return;
     setLoading(true);
     await new Promise((r) => setTimeout(r, 1400));
+
+    addNotification({
+      type: "lembur_submitted",
+      title: "Pengajuan Lembur Terkirim",
+      message: `Pengajuan lembur Anda untuk tanggal ${form.date} (${form.startTime} - ${form.endTime} • ${hours.toFixed(1)} jam) telah terkirim dan sedang menunggu persetujuan atasan.`,
+      statusBadge: "pending",
+      meta: {
+        requestType: "lembur",
+      },
+    });
+
     toast.success("Lembur berhasil diajukan!", { description: "Menunggu persetujuan atasan." });
     router.push("/lembur");
   };

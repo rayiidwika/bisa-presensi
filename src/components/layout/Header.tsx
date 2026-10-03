@@ -1,6 +1,8 @@
 "use client";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, ChevronDown } from "lucide-react";
+import { getUnreadCount, showNotificationPopup } from "@/lib/notifications";
 
 interface HeaderProps {
   title?: string;
@@ -19,6 +21,20 @@ export default function Header({
   children,
 }: HeaderProps) {
   const router = useRouter();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!showBell) return;
+    const update = () => setUnreadCount(getUnreadCount());
+    update();
+    window.addEventListener("bisa_notification_change", update);
+    window.addEventListener("storage", update);
+    return () => {
+      window.removeEventListener("bisa_notification_change", update);
+      window.removeEventListener("storage", update);
+    };
+  }, [showBell]);
+
   return (
     <div className="bg-gradient-to-b from-[#3b9edd] to-[#1a6fb5] relative overflow-hidden">
       {/* Background blobs */}
@@ -51,9 +67,18 @@ export default function Header({
             )}
           </div>
           {showBell && (
-            <button className="relative w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
+            <button
+              onClick={async () => {
+                await showNotificationPopup();
+                setUnreadCount(getUnreadCount());
+              }}
+              className="relative w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 active:scale-95 flex items-center justify-center transition-all cursor-pointer"
+              aria-label="Buka Notifikasi"
+            >
               <Bell size={17} className="text-white" />
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-400 border-2 border-[#1a7dc4]" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-[#1a6fb5] animate-pulse" />
+              )}
             </button>
           )}
         </div>

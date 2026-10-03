@@ -8,6 +8,7 @@ import type { LeaveFormData, LeaveType, Keperluan } from "@/types";
 import { calcDays, formatDate, formatDateLong } from "@/lib/utils";
 import IzinScheduleModal from "@/components/pengajuan/IzinScheduleModal";
 import AttachmentUploader from "@/components/pengajuan/AttachmentUploader";
+import { addNotification } from "@/lib/notifications";
 
 async function showConfirm(title: string, html: string) {
   const Swal = (await import("sweetalert2")).default;
@@ -21,6 +22,11 @@ async function showConfirm(title: string, html: string) {
     confirmButtonColor: "#1a7dc4",
     cancelButtonColor: "#94a3b8",
     reverseButtons: true,
+    customClass: {
+      popup: "!w-[92vw] sm:!w-[420px] !max-w-[420px] rounded-3xl p-6 shadow-2xl",
+      confirmButton: "rounded-xl font-bold py-2.5 px-5 text-sm shadow-sm",
+      cancelButton: "rounded-xl font-medium py-2.5 px-4 text-sm",
+    },
   });
 }
 
@@ -177,6 +183,28 @@ export default function TambahPengajuanPage() {
 
     setLoading(true);
     await new Promise((r) => setTimeout(r, 1200));
+
+    const typeLabel =
+      form.type === "cuti"
+        ? form.cutiCategory
+          ? `Cuti (${form.cutiCategory})`
+          : "Cuti"
+        : form.type === "sakit"
+        ? "Sakit"
+        : "Izin";
+
+    addNotification({
+      type: "pengajuan_submitted",
+      title: `⏳ Pengajuan ${typeLabel} Terkirim`,
+      message: `Pengajuan ${typeLabel} Anda (${formattedIzinDate || "1 Hari"}) telah diserahkan ke HRD dan sedang menunggu verifikasi serta persetujuan atasan.`,
+      statusBadge: "pending",
+      meta: {
+        requestType: form.type || "izin",
+        category: form.type === "cuti" ? form.cutiCategory : form.keperluan,
+        targetUrl: "/pengajuan",
+      },
+    });
+
     toast.success("Pengajuan berhasil diajukan!", {
       description: "Tim HR akan segera memproses pengajuan Anda.",
     });

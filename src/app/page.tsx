@@ -18,8 +18,12 @@ import {
   AlarmClock,
   MessageSquare,
   Settings,
+  X,
 } from "lucide-react";
 import Swal from "sweetalert2";
+import { getUnreadCount, showNotificationPopup } from "@/lib/notifications";
+import { getUserProfile, UserProfile } from "@/lib/userProfile";
+import ProfileSettingsModal from "@/components/profile/ProfileSettingsModal";
 
 export default function HomePage() {
   const router = useRouter();
@@ -31,6 +35,10 @@ export default function HomePage() {
   const [checkInNotes, setCheckInNotes] = useState<string>("");
   const [checkOutNotes, setCheckOutNotes] = useState<string>("");
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [userProfile, setUserProfile] = useState<UserProfile>(getUserProfile());
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isPreviewAvatarOpen, setIsPreviewAvatarOpen] = useState<boolean>(false);
 
   // Realtime Dates & Clock State
   const [todayCardDate, setTodayCardDate] = useState<string>("Rabu , 30 Sep 2026");
@@ -158,24 +166,32 @@ export default function HomePage() {
     };
 
     syncAttendance();
+    const updateUnread = () => setUnreadCount(getUnreadCount());
+    updateUnread();
+    const syncProfile = () => setUserProfile(getUserProfile());
+    syncProfile();
+
     window.addEventListener("focus", syncAttendance);
     window.addEventListener("storage", syncAttendance);
+    window.addEventListener("bisa_notification_change", updateUnread);
+    window.addEventListener("bisa_profile_change", syncProfile);
+    window.addEventListener("storage", syncProfile);
     return () => {
       clearInterval(clockTimer);
       window.removeEventListener("focus", syncAttendance);
       window.removeEventListener("storage", syncAttendance);
+      window.removeEventListener("bisa_notification_change", updateUnread);
+      window.removeEventListener("bisa_profile_change", syncProfile);
+      window.removeEventListener("storage", syncProfile);
     };
   }, []);
 
   const handleIstirahatClick = () => {
     if (!breakStartTime) {
-      // Belum mulai istirahat -> Langsung ke scan Clock In Istirahat
       router.push("/absensi/check-in?type=break_start");
     } else if (breakStartTime && !breakEndTime) {
-      // Sedang istirahat -> Langsung ke scan Selesai Istirahat
       router.push("/absensi/check-in?type=break_end");
     } else {
-      // Sudah selesai istirahat -> Tampilkan pop-up informasi jam istirahat dengan tombol Tutup saja
       Swal.fire({
         title: "Istirahat Hari Ini",
         html: `
@@ -203,67 +219,37 @@ export default function HomePage() {
     }
   };
 
-  const handleSettingsClick = () => {
+  const handleLogout = () => {
     Swal.fire({
-      title: "Pengaturan",
-      html: `
-        <div class="text-left mt-2">
-          <div class="bg-gradient-to-r from-blue-50 to-sky-50 border border-blue-100 rounded-2xl p-4 mb-4 flex items-center gap-3">
-            <div class="w-12 h-12 rounded-full bg-[#156bb8] text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
-              S
-            </div>
-            <div class="min-w-0">
-              <h4 class="font-bold text-slate-800 text-sm leading-tight">Setiawan</h4>
-              <p class="text-xs text-slate-500 font-medium mt-0.5">NIP: 2024001 • Divisi IT</p>
-              <div class="flex items-center gap-1.5 mt-1 text-[11px] text-emerald-600 font-semibold">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
-                <span>Akun Aktif</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-slate-50 border border-slate-100 rounded-xl p-3 mb-2 flex justify-between items-center text-xs">
-            <span class="text-slate-500 font-medium">Versi Aplikasi</span>
-            <span class="font-bold text-slate-700">v2.4.0</span>
-          </div>
-        </div>
-      `,
+      title: "Keluar Akun?",
+      text: "Apakah Anda yakin ingin keluar dari aplikasi?",
+      icon: "warning",
       showCancelButton: true,
-      confirmButtonText: "Keluar (Logout)",
+      confirmButtonText: "Ya, Keluar",
+      cancelButtonText: "Batal",
       confirmButtonColor: "#ef4444",
-      cancelButtonText: "Tutup",
       cancelButtonColor: "#94a3b8",
       reverseButtons: true,
       customClass: {
-        popup: "rounded-3xl p-6",
-        confirmButton: "rounded-xl font-bold py-2.5 px-4 text-sm shadow-sm",
+        popup: "!w-[92vw] sm:!w-[400px] !max-w-[400px] rounded-3xl p-6 shadow-2xl",
+        confirmButton: "rounded-xl font-bold py-2.5 px-5 text-sm shadow-sm",
         cancelButton: "rounded-xl font-medium py-2.5 px-4 text-sm",
       },
-    }).then((result) => {
-      if (result.isConfirmed) {
-        Swal.fire({
-          title: "Keluar Akun?",
-          text: "Apakah Anda yakin ingin keluar dari aplikasi?",
-          icon: "warning",
-          showCancelButton: true,
-          confirmButtonText: "Ya, Keluar",
-          cancelButtonText: "Batal",
-          confirmButtonColor: "#ef4444",
-          cancelButtonColor: "#94a3b8",
-          reverseButtons: true,
-        }).then((res) => {
-          if (res.isConfirmed) {
-            try {
-              localStorage.removeItem("bisa_logged_in");
-              document.cookie = "bisa_logged_in=; path=/; max-age=0; SameSite=Lax";
-            } catch (e) {
-              console.warn(e);
-            }
-            router.push("/login");
-          }
-        });
+    }).then((res) => {
+      if (res.isConfirmed) {
+        try {
+          localStorage.removeItem("bisa_logged_in");
+          document.cookie = "bisa_logged_in=; path=/; max-age=0; SameSite=Lax";
+        } catch (e) {
+          console.warn(e);
+        }
+        router.push("/login");
       }
     });
+  };
+
+  const handleSettingsClick = () => {
+    setIsSettingsOpen(true);
   };
 
   const rekapItems = [
@@ -383,21 +369,20 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Actions: Notification Bell & Logout */}
+          {/* Actions: Notification Bell & Settings */}
           <div className="flex items-center gap-1.5">
             <button
-              onClick={() =>
-                Swal.fire({
-                  title: "Notifikasi",
-                  text: "Tidak ada notifikasi baru saat ini.",
-                  icon: "info",
-                  confirmButtonColor: "#156bb8",
-                })
-              }
+              onClick={async () => {
+                await showNotificationPopup();
+                setUnreadCount(getUnreadCount());
+              }}
               aria-label="Notifikasi"
-              className="text-white hover:opacity-90 active:scale-95 transition-all p-1.5 cursor-pointer"
+              className="relative text-white hover:opacity-90 active:scale-95 transition-all p-1.5 cursor-pointer"
             >
               <Bell size={22} className="fill-white text-white drop-shadow-sm" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-[#156bb8] animate-pulse" />
+              )}
             </button>
 
             <button
@@ -414,7 +399,7 @@ export default function HomePage() {
         {/* Greeting Text */}
         <div className="mt-5 mb-4 relative z-10">
           <h1 className="text-white text-[24px] font-bold italic tracking-wide leading-tight">
-            Hallo Setiawan
+            Hallo {userProfile.name}
           </h1>
           <div className="text-white/90 text-[11.5px] font-medium tracking-normal mt-1 leading-snug transition-all">
             {!hasCheckedIn ? (
@@ -440,7 +425,7 @@ export default function HomePage() {
         <div className="bg-white rounded-3xl p-4 sm:p-5 shadow-xl border border-white/60 relative z-10">
           {/* Company Badge */}
           <div className="inline-block bg-[#156bb8] text-white text-[11.5px] font-bold px-3.5 py-1 rounded-md shadow-xs">
-            PT BISA MEDIA GRUP
+            {userProfile.company || "PT BISA MEDIA GRUP"}
           </div>
 
           {/* Employee Card Body - Top Row: Info Karyawan & Avatar */}
@@ -448,28 +433,41 @@ export default function HomePage() {
             {/* Info Karyawan: Nama & Divisi & Staff */}
             <div className="flex-1 pr-3">
               <h2 className="text-[21px] font-black text-slate-800 leading-tight tracking-tight">
-                Setiawan
+                {userProfile.name}
               </h2>
               <p className="text-[13px] text-slate-500 font-semibold mt-1">
-                Divisi : IT
+                Divisi : {userProfile.division}
               </p>
               <p className="text-[13px] text-slate-500 font-semibold mt-0.5">
-                Staff : IT Programmer
+                Staff : {userProfile.position || "Staff"}
               </p>
             </div>
 
-            {/* Avatar Profile (Circle with Slate Silhouette) */}
-            <div className="w-[125px] flex justify-center mr-2 sm:mr-4 shrink-0">
-              <div className="w-[68px] h-[68px] rounded-full bg-[#d8e5ee] border-2 border-white shadow-sm flex items-center justify-center overflow-hidden">
-                <svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
-                  <circle cx="32" cy="24" r="11" fill="#475569" />
-                  <path
-                    d="M14 56C14 45 22 41 32 41C42 41 50 45 50 56"
-                    fill="#475569"
+            {/* Avatar Profile (Click to preview/view photo) */}
+            <button
+              onClick={() => setIsPreviewAvatarOpen(true)}
+              title="Lihat Foto Profil"
+              aria-label="Lihat Foto Profil"
+              className="w-[125px] flex justify-center mr-2 sm:mr-4 shrink-0 cursor-pointer active:scale-95 transition-transform group"
+            >
+              <div className="w-[68px] h-[68px] rounded-full bg-[#d8e5ee] border-2 border-white shadow-sm flex items-center justify-center overflow-hidden group-hover:ring-2 group-hover:ring-[#156bb8] transition-all relative">
+                {userProfile.avatarUrl ? (
+                  <img
+                    src={userProfile.avatarUrl}
+                    alt={userProfile.name}
+                    className="w-full h-full object-cover"
                   />
-                </svg>
+                ) : (
+                  <svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
+                    <circle cx="32" cy="24" r="11" fill="#475569" />
+                    <path
+                      d="M14 56C14 45 22 41 32 41C42 41 50 45 50 56"
+                      fill="#475569"
+                    />
+                  </svg>
+                )}
               </div>
-            </div>
+            </button>
           </div>
 
           {/* Employee Card Body - Bottom Rows: Jadwal Hari, Jam Realtime & Jam Kerja */}
@@ -744,6 +742,76 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* ══════════════ PROFILE & SETTINGS MODAL ══════════════ */}
+      <ProfileSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
+
+      {/* ══════════════ AVATAR PHOTO PREVIEW MODAL ══════════════ */}
+      {isPreviewAvatarOpen && (
+        <div
+          onClick={() => setIsPreviewAvatarOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fade-in select-none"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full max-w-[340px] rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col items-center p-6 text-center animate-scale-up relative"
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => setIsPreviewAvatarOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-all cursor-pointer active:scale-95"
+              aria-label="Tutup"
+            >
+              <X size={16} />
+            </button>
+
+            {/* Photo Container */}
+            <div className="w-48 h-48 sm:w-52 sm:h-52 rounded-full bg-slate-100 border-4 border-[#156bb8]/20 shadow-xl overflow-hidden flex items-center justify-center mt-2 mb-4">
+              {userProfile.avatarUrl ? (
+                <img
+                  src={userProfile.avatarUrl}
+                  alt={userProfile.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <svg viewBox="0 0 64 64" fill="none" className="w-full h-full bg-slate-200">
+                  <circle cx="32" cy="24" r="11" fill="#475569" />
+                  <path
+                    d="M14 56C14 45 22 41 32 41C42 41 50 45 50 56"
+                    fill="#475569"
+                  />
+                </svg>
+              )}
+            </div>
+
+            {/* User Info */}
+            <div className="inline-block bg-[#156bb8]/10 text-[#156bb8] text-[11px] font-bold px-3 py-0.5 rounded-full mb-2">
+              {userProfile.company || "PT BISA MEDIA GRUP"}
+            </div>
+            <h3 className="text-lg font-black text-slate-800 leading-tight">
+              {userProfile.name}
+            </h3>
+            <p className="text-xs text-slate-500 font-semibold mt-1">
+              Divisi : {userProfile.division} • {userProfile.position || "Staff"}
+            </p>
+
+            {/* Close Button */}
+            <div className="w-full mt-5">
+              <button
+                type="button"
+                onClick={() => setIsPreviewAvatarOpen(false)}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all cursor-pointer active:scale-95"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
