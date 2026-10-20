@@ -13,6 +13,7 @@ import {
   EyeOff,
   KeyRound,
   LogOut,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import Swal from "sweetalert2";
@@ -100,6 +101,33 @@ export default function ProfileSettingsModal({
         router.push("/login");
       }
     });
+  };
+
+  // Handle Reset Attendance untuk Pengujian Kosong
+  const handleResetAttendance = () => {
+    [
+      "bisa_attendance_today",
+      "bisa_attendance_checkin_time",
+      "bisa_attendance_checkout_time",
+      "bisa_attendance_checkin_notes",
+      "bisa_attendance_checkout_notes",
+      "bisa_attendance_checkin_photo",
+      "bisa_attendance_checkout_photo",
+      "bisa_attendance_checkin_location",
+      "bisa_attendance_checkout_location",
+      "bisa_attendance_checkin_distance",
+      "bisa_attendance_checkout_distance",
+      "bisa_attendance_break_start",
+      "bisa_attendance_break_end",
+      "bisa_attendance_notes",
+      "bisa_attendance_photo",
+    ].forEach((k) => localStorage.removeItem(k));
+    window.dispatchEvent(new Event("storage"));
+    toast.success("Absensi hari ini berhasil direset ke kosong!");
+    onClose();
+    setTimeout(() => {
+      window.location.reload();
+    }, 250);
   };
 
   if (!isOpen) return null;
@@ -457,8 +485,17 @@ export default function ProfileSettingsModal({
           )}
         </div>
 
-        {/* ══════════════ MODAL FOOTER (LOGOUT) ══════════════ */}
-        <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/80 shrink-0">
+        {/* ══════════════ MODAL FOOTER (RESET & LOGOUT) ══════════════ */}
+        <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/80 shrink-0 space-y-2">
+          <button
+            type="button"
+            onClick={handleResetAttendance}
+            className="w-full py-2.5 px-3 rounded-xl bg-blue-50/70 hover:bg-blue-100 active:bg-blue-200/80 text-[#156bb8] font-bold text-xs border border-blue-200/80 transition-all cursor-pointer active:scale-98 flex items-center justify-center gap-1.5 shadow-2xs"
+          >
+            <RotateCcw size={13} strokeWidth={2.4} />
+            <span>Reset Absensi Hari Ini (Uji Coba Kosong)</span>
+          </button>
+
           <button
             type="button"
             onClick={handleLogout}

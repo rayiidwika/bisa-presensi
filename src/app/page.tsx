@@ -164,6 +164,31 @@ export default function HomePage() {
     }
     setPastRekapDays(past);
 
+    // Otomatis reset data absensi hari ini jika URL memiliki ?reset=attendance atau ?reset=true
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("reset") === "attendance" || urlParams.get("reset") === "true") {
+        [
+          "bisa_attendance_today",
+          "bisa_attendance_checkin_time",
+          "bisa_attendance_checkout_time",
+          "bisa_attendance_checkin_notes",
+          "bisa_attendance_checkout_notes",
+          "bisa_attendance_checkin_photo",
+          "bisa_attendance_checkout_photo",
+          "bisa_attendance_checkin_location",
+          "bisa_attendance_checkout_location",
+          "bisa_attendance_checkin_distance",
+          "bisa_attendance_checkout_distance",
+          "bisa_attendance_break_start",
+          "bisa_attendance_break_end",
+          "bisa_attendance_notes",
+          "bisa_attendance_photo",
+        ].forEach((k) => localStorage.removeItem(k));
+        window.history.replaceState({}, "", "/");
+      }
+    }
+
     const syncAttendance = () => {
       let inTime =
         typeof window !== "undefined"
@@ -487,9 +512,9 @@ export default function HomePage() {
           </h1>
           <div className="text-white/95 text-[13px] sm:text-[14px] font-medium tracking-normal mt-2.5 sm:mt-3 leading-snug transition-all">
             {!hasCheckedIn ? (
-              <p>Jangan lupa ngabsen // Semangat bekerjanya yaa</p>
+              <p>Jangan lupa absen masuk // Awali harimu dengan semangat ☀️</p>
             ) : !hasCheckedOut ? (
-              <p>Absen masuk beres // Semangat bekerjanya yaa 💪</p>
+              <p>Absen masuk tercatat // Semangat kerjanya semoga harimu senin terus 💪🔥</p>
             ) : (
               <p>Absen pulang tercatat // Selamat beristirahat 🎉</p>
             )}
