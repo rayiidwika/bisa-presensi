@@ -241,7 +241,7 @@ export default function LoginPage() {
               toast.success("Login Face ID Berhasil!", {
                 description: "Selamat datang kembali, Setiawan (IT Programmer)!",
               });
-              router.push("/");
+              window.location.href = "/";
             }
           }, 1000);
           timers.push(interval as any);
@@ -316,7 +316,7 @@ export default function LoginPage() {
           toast.success("Login Face ID Berhasil!", {
             description: "Selamat datang kembali, Setiawan (IT Programmer)!",
           });
-          router.push("/");
+          window.location.href = "/";
         }
       }, 1000);
     }, 2400);
@@ -337,7 +337,7 @@ export default function LoginPage() {
     toast.success("Login Face ID Berhasil!", {
       description: "Selamat datang kembali, Setiawan (IT Programmer)!",
     });
-    router.push("/");
+    window.location.href = "/";
   };
 
   // ══════════════ 1. SPLASH SCREEN ANIMATION ══════════════
@@ -404,7 +404,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     // Simulate login request
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 600));
     setIsLoading(false);
 
     markUserLoggedIn();
@@ -412,7 +412,7 @@ export default function LoginPage() {
       description: "Selamat datang kembali, Setiawan!",
     });
 
-    router.push("/");
+    window.location.href = "/";
   };
 
 
@@ -543,8 +543,8 @@ export default function LoginPage() {
                 <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider px-0.5">
                   NIP / Email
                 </label>
-                <div className="relative">
-                  <div className="w-10 h-10 absolute left-1 top-1 flex items-center justify-center text-slate-400 pointer-events-none">
+                <div className="relative flex items-center">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center justify-center text-slate-400 pointer-events-none">
                     <User size={16} strokeWidth={2.2} />
                   </div>
                   <input
@@ -555,7 +555,7 @@ export default function LoginPage() {
                       if (errors.identifier) setErrors({ ...errors, identifier: undefined });
                     }}
                     placeholder="Contoh: 2024001"
-                    className={`w-full bg-[#f8fcff] border rounded-xl pl-10 pr-3.5 py-2.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-all shadow-2xs ${
+                    className={`w-full bg-[#f8fcff] border rounded-xl pl-10 pr-3.5 py-2.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-all shadow-2xs leading-normal ${
                       errors.identifier
                         ? "border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100"
                         : "border-[#c8dcea] focus:border-[#1a7dc4] focus:bg-white focus:ring-2 focus:ring-[#1a7dc4]/15"
@@ -574,8 +574,8 @@ export default function LoginPage() {
                 <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider px-0.5">
                   Kata Sandi
                 </label>
-                <div className="relative">
-                  <div className="w-10 h-10 absolute left-1 top-1 flex items-center justify-center text-slate-400 pointer-events-none">
+                <div className="relative flex items-center">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center justify-center text-slate-400 pointer-events-none">
                     <Lock size={16} strokeWidth={2.2} />
                   </div>
                   <input
@@ -586,7 +586,7 @@ export default function LoginPage() {
                       if (errors.password) setErrors({ ...errors, password: undefined });
                     }}
                     placeholder="••••••••"
-                    className={`w-full bg-[#f8fcff] border rounded-xl pl-10 pr-10 py-2.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-all shadow-2xs ${
+                    className={`w-full bg-[#f8fcff] border rounded-xl pl-10 pr-10 py-2.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-all shadow-2xs leading-normal ${
                       errors.password
                         ? "border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100"
                         : "border-[#c8dcea] focus:border-[#1a7dc4] focus:bg-white focus:ring-2 focus:ring-[#1a7dc4]/15"
@@ -595,7 +595,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="w-10 h-10 absolute right-1 top-1 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
                     aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}

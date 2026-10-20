@@ -365,26 +365,47 @@ export default function LemburPage() {
     return [...customItems, ...instructionItems, ...requestItems];
   }, [customRequests, respondedInstructions, lemburSessions, lemburCheckInTime, lemburCheckOutTime, activeApprovedId, isLemburCompleted]);
 
-  // Check if there is an active approved overtime to show the Clock In/Out card
-  // TAMPILKAN JIKA SUDAH DI-APPROVE (BAIK DARI PENGAJUAN MAUPUN INSTRUKSI YANG TELAH DI-ACC)
-  // DAN TETAP TAMPIL DI ATAS BAHKAN SETELAH ABSEN SELESAI
+  // ── 4. Overtime Session yang Sedang Aktif (Approved) ──────
+  // TAMPIL DI ATAS JIKA SUDAH DISETUJUI, DAN HILANG OTOMATIS SETELAH BERES CLOCK OUT
   const activeApprovedOvertime = useMemo(() => {
-    // 1. Jika ada activeApprovedId dan berstatus approved, tetap tampilkan di atas
+    const isSessionDone = (itemId: string, checkOut?: string) => {
+      const sid = itemId.toLowerCase();
+      const sess = lemburSessions[sid] || lemburSessions[itemId];
+      if (sess?.isCompleted || (sess?.checkOutTime && sess.checkOutTime !== "-- : --")) {
+        return true;
+      }
+      if (checkOut && checkOut !== "-- : --" && checkOut !== "--:--" && checkOut !== "-") {
+        return true;
+      }
+      if (activeApprovedId && activeApprovedId.toLowerCase() === sid) {
+        if (isLemburCompleted) return true;
+        if (lemburCheckOutTime && lemburCheckOutTime !== "-- : --" && lemburCheckOutTime !== "--:--" && lemburCheckOutTime !== "-") {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // 1. Cek jika sesi aktif yang dipilih belum selesai clock out
     if (activeApprovedId) {
       const found = allHistoryItems.find(
         (item) => item.id.toLowerCase() === activeApprovedId.toLowerCase() && item.status === "approved"
       );
-      if (found) return found;
+      if (found && !isSessionDone(found.id, found.checkOutTime)) {
+        return found;
+      }
     }
 
-    // 2. Jika ada lembur yang disetujui (baik dari pengajuan maupun instruksi), tetap tampilkan di atas
-    const approvedItem = allHistoryItems.find(
-      (item) => item.status === "approved"
-    );
-    if (approvedItem) return approvedItem;
+    // 2. Cari lembur approved lain (baik instruksi maupun pengajuan) yang BELUM selesai clock out
+    const uncompletedApproved = allHistoryItems.find((item) => {
+      if (item.status !== "approved") return false;
+      return !isSessionDone(item.id, item.checkOutTime);
+    });
+
+    if (uncompletedApproved) return uncompletedApproved;
 
     return null;
-  }, [activeApprovedId, allHistoryItems]);
+  }, [activeApprovedId, allHistoryItems, isLemburCompleted, lemburCheckOutTime, lemburSessions]);
 
   // Auto-sync activeApprovedId if activeApprovedOvertime exists
   useEffect(() => {
