@@ -40,7 +40,7 @@ export default function RootLayout({
           toastOptions={{
             style: {
               maxWidth: "420px",
-              fontFamily: '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
+              fontFamily: "var(--font-geist-sans)",
             },
           }}
         />
