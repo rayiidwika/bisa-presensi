@@ -77,7 +77,15 @@ export default function PengajuanDetailPage() {
               { icon: <Calendar size={14}/>, label: "Tanggal Mulai", value: formatDate(req.startDate) },
               { icon: <Calendar size={14}/>, label: "Tanggal Selesai", value: formatDate(req.endDate) },
               ...(req.startTime && req.endTime && req.startTime !== "--:--"
-                ? [{ icon: <Clock size={14}/>, label: "Waktu Izin", value: `${req.startTime} - ${req.endTime} WIB` }]
+                ? [{
+                    icon: <Clock size={14}/>,
+                    label: "Waktu Izin",
+                    value: (
+                      <span>
+                        <span className="font-time font-bold">{req.startTime} - {req.endTime}</span> WIB
+                      </span>
+                    ),
+                  }]
                 : []),
               { icon: <Clock size={14}/>, label: "Durasi", value: `${req.totalDays} hari` },
             ].map((item, i) => (

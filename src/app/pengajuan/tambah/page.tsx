@@ -193,17 +193,52 @@ export default function TambahPengajuanPage() {
         ? "Sakit"
         : "Izin";
 
-    addNotification({
-      type: "pengajuan_submitted",
-      title: `⏳ Pengajuan ${typeLabel} Terkirim`,
-      message: `Pengajuan ${typeLabel} Anda (${formattedIzinDate || "1 Hari"}) telah diserahkan ke HRD dan sedang menunggu verifikasi serta persetujuan atasan.`,
-      statusBadge: "pending",
-      meta: {
-        requestType: form.type || "izin",
-        category: form.type === "cuti" ? form.cutiCategory : form.keperluan,
-        targetUrl: "/pengajuan",
-      },
-    });
+    let attachmentData = "";
+    if (form.attachmentType === "link" && form.attachmentLink) {
+      attachmentData = form.attachmentLink;
+    } else if (form.attachment) {
+      attachmentData = URL.createObjectURL(form.attachment);
+    } else {
+      attachmentData =
+        form.type === "sakit"
+          ? "https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=600&auto=format&fit=crop&q=80"
+          : form.type === "cuti"
+          ? "https://images.unsplash.com/photo-1450133064473-71024230f91b?w=600&auto=format&fit=crop&q=80"
+          : "https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=600&auto=format&fit=crop&q=80";
+    }
+
+    const newLeave = {
+      id: `LR-${Date.now()}`,
+      employeeId: "EMP-001",
+      type: form.type || "izin",
+      cutiCategory: form.cutiCategory,
+      keperluan: form.type === "cuti" ? form.cutiCategory || "Cuti" : form.type === "sakit" ? "Sakit" : form.keperluan || "Izin",
+      startDate: form.startDate,
+      endDate: form.endDate,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      reason: form.reason,
+      attachment: attachmentData,
+      attachmentType: form.attachmentType,
+      attachmentLink: form.attachmentLink,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      totalDays: days || 1,
+      totalHours: (days || 1) * 8,
+    };
+
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("bisa_custom_leave_requests");
+        const list = raw ? JSON.parse(raw) : [];
+        list.unshift(newLeave);
+        localStorage.setItem("bisa_custom_leave_requests", JSON.stringify(list));
+        window.dispatchEvent(new Event("bisa_leave_change"));
+      } catch (err) {
+        console.warn(err);
+      }
+    }
 
     toast.success("Pengajuan berhasil diajukan!", {
       description: "Tim HR akan segera memproses pengajuan Anda.",

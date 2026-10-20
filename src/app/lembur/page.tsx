@@ -22,6 +22,9 @@ import {
   Maximize2,
   Building2,
   Coffee,
+  FileText,
+  User,
+  ChevronLeft,
 } from "lucide-react";
 import MonthYearPicker from "@/components/ui/MonthYearPicker";
 import { mockOvertimeRequests, mockOvertimeSummary } from "@/lib/mockData";
@@ -32,6 +35,7 @@ import {
   acceptLemburInstruction,
   declineLemburInstruction,
   resetNotificationsToDefault,
+  addNotification,
   AppNotification,
 } from "@/lib/notifications";
 import { toast } from "sonner";
@@ -83,9 +87,6 @@ export default function LemburPage() {
   const [year, setYear] = useState(2026);
   const [page, setPage] = useState(1);
   const [instructions, setInstructions] = useState<AppNotification[]>([]);
-  const [selectedItem, setSelectedItem] = useState<UnifiedOvertimeItem | null>(null);
-  const [modalActiveTab, setModalActiveTab] = useState<"in" | "out">("in");
-  const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
 
   // Realtime Clock State
   const [realtimeClock, setRealtimeClock] = useState<string>("");
@@ -105,15 +106,23 @@ export default function LemburPage() {
       const savedIn = localStorage.getItem("bisa_lembur_checkin_time") || "";
       const savedOut = localStorage.getItem("bisa_lembur_checkout_time") || "";
       const savedActiveId = localStorage.getItem("bisa_lembur_active_id") || null;
-      const completed =
-        localStorage.getItem("bisa_lembur_completed") === "true" ||
-        (Boolean(savedIn) && Boolean(savedOut));
+      const completed = localStorage.getItem("bisa_lembur_completed") === "true";
 
       const rawSessions = localStorage.getItem("bisa_lembur_sessions");
       const parsedSessions = rawSessions ? JSON.parse(rawSessions) : {};
 
-      setLemburCheckInTime(savedIn);
-      setLemburCheckOutTime(savedOut);
+      let effectiveIn = savedIn;
+      let effectiveOut = savedOut;
+      if (savedActiveId) {
+        const session = parsedSessions[savedActiveId] || parsedSessions[savedActiveId.toLowerCase()];
+        if (session) {
+          if (!effectiveIn && session.checkInTime) effectiveIn = session.checkInTime;
+          if (!effectiveOut && session.checkOutTime) effectiveOut = session.checkOutTime;
+        }
+      }
+
+      setLemburCheckInTime(effectiveIn);
+      setLemburCheckOutTime(effectiveOut);
       setActiveApprovedId(savedActiveId);
       setIsLemburCompleted(completed);
       setLemburSessions(parsedSessions);
@@ -145,13 +154,12 @@ export default function LemburPage() {
     loadCustomRequests();
     loadAttendanceState();
 
-    // Realtime clock with seconds
+    // Realtime clock (hanya jam dan menit)
     const updateClock = () => {
       const now = new Date();
       const h = String(now.getHours()).padStart(2, "0");
       const m = String(now.getMinutes()).padStart(2, "0");
-      const s = String(now.getSeconds()).padStart(2, "0");
-      setRealtimeClock(`${h}:${m}:${s}`);
+      setRealtimeClock(`${h}:${m}`);
 
       const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
       const months = [
@@ -199,8 +207,11 @@ export default function LemburPage() {
   // Combined History Items (Both Responded Instructions & Self-submitted Requests)
   const allHistoryItems = useMemo<UnifiedOvertimeItem[]>(() => {
     const getSessionData = (id: string, isApproved: boolean) => {
+      const nid = id.toLowerCase();
+      const currentActive = (activeApprovedId || "").toLowerCase();
+
       // 1. If this is the active overtime session in progress (even before check in)
-      if (activeApprovedId === id) {
+      if (currentActive === nid) {
         let parsedInCoords = { lat: TASIK_LAT, lng: TASIK_LNG };
         let parsedOutCoords = { lat: TASIK_LAT, lng: TASIK_LNG };
         try {
@@ -229,12 +240,12 @@ export default function LemburPage() {
         };
       }
 
-      // 2. Saved completed/previous sessions
-      const session = lemburSessions[id];
+      // 2. Saved completed/previous sessions in lemburSessions
+      const session = lemburSessions[id] || lemburSessions[nid];
       if (session) {
         return {
-          checkInTime: session.checkInTime,
-          checkOutTime: session.checkOutTime,
+          checkInTime: session.checkInTime || "",
+          checkOutTime: session.checkOutTime || "",
           checkInPhoto: session.checkInPhoto || "/default-face-scan.jpg",
           checkOutPhoto: session.checkOutPhoto || "/default-checkout-scan.jpg",
           checkInLocation: session.checkInLocation || "Kantor BISA MEDIA, Tasikmalaya",
@@ -248,27 +259,24 @@ export default function LemburPage() {
         };
       }
 
-      // 3. For past history default items
-      if (isApproved) {
-        return {
-          checkInTime: "17:30",
-          checkOutTime: "21:00",
-          checkInPhoto: "/default-face-scan.jpg",
-          checkOutPhoto: "/default-checkout-scan.jpg",
-          checkInLocation: "Kantor BISA MEDIA, Kota Tasikmalaya",
-          checkOutLocation: "Kantor BISA MEDIA, Kota Tasikmalaya",
-          checkInCoords: { lat: TASIK_LAT, lng: TASIK_LNG },
-          checkOutCoords: { lat: TASIK_LAT, lng: TASIK_LNG },
-          checkInNotes: "Check-in lembur terverifikasi biometrik di area kantor",
-          checkOutNotes: "Check-out lembur tugas selesai",
-          notes: "Presensi lembur tercatat dan terverifikasi biometrik",
-          isCompleted: true,
-        };
-      }
-      return {};
+      // 3. Fallback for un-clocked items (pending or newly approved)
+      return {
+        checkInTime: "",
+        checkOutTime: "",
+        checkInPhoto: "/default-face-scan.jpg",
+        checkOutPhoto: "/default-checkout-scan.jpg",
+        checkInLocation: "Kantor BISA MEDIA, Kota Tasikmalaya",
+        checkOutLocation: "Kantor BISA MEDIA, Kota Tasikmalaya",
+        checkInCoords: { lat: TASIK_LAT, lng: TASIK_LNG },
+        checkOutCoords: { lat: TASIK_LAT, lng: TASIK_LNG },
+        checkInNotes: "",
+        checkOutNotes: "",
+        notes: "",
+        isCompleted: false,
+      };
     };
 
-    // 1. Custom user requests submitted via form
+    // 1. Custom user requests submitted via form or approved in simulation
     const customItems: UnifiedOvertimeItem[] = customRequests.map((req) => {
       const isApproved = req.status === "approved";
       const sData = getSessionData(req.id, isApproved);
@@ -327,8 +335,10 @@ export default function LemburPage() {
       };
     });
 
-    // 3. Self-requested overtime from mock data
-    const requestItems: UnifiedOvertimeItem[] = mockOvertimeRequests.map((req) => {
+    // 3. Self-requested overtime from mock data (filtered if overridden in customRequests)
+    const requestItems: UnifiedOvertimeItem[] = mockOvertimeRequests
+      .filter((req) => !customRequests.some((c) => c.id.toLowerCase() === req.id.toLowerCase()))
+      .map((req) => {
       const isApproved = req.status === "approved";
       const sData = getSessionData(req.id, isApproved);
       let timeDisplay = `${req.startTime} - ${req.endTime}`;
@@ -356,24 +366,60 @@ export default function LemburPage() {
   }, [customRequests, respondedInstructions, lemburSessions, lemburCheckInTime, lemburCheckOutTime, activeApprovedId, isLemburCompleted]);
 
   // Check if there is an active approved overtime to show the Clock In/Out card
-  // HIDE IF LEMBUR IS ALREADY COMPLETED (CHECKED OUT)
+  // TAMPILKAN JIKA SUDAH DI-APPROVE (BAIK DARI PENGAJUAN MAUPUN INSTRUKSI YANG TELAH DI-ACC)
+  // DAN TETAP TAMPIL DI ATAS BAHKAN SETELAH ABSEN SELESAI
   const activeApprovedOvertime = useMemo(() => {
-    if (isLemburCompleted) return null;
-
-    // Only show Clock In/Out card if the user explicitly accepted an instruction or started an approved session
+    // 1. Jika ada activeApprovedId dan berstatus approved, tetap tampilkan di atas
     if (activeApprovedId) {
-      const found = allHistoryItems.find((item) => item.id === activeApprovedId && item.status === "approved");
+      const found = allHistoryItems.find(
+        (item) => item.id.toLowerCase() === activeApprovedId.toLowerCase() && item.status === "approved"
+      );
       if (found) return found;
     }
 
+    // 2. Jika ada lembur yang disetujui (baik dari pengajuan maupun instruksi), tetap tampilkan di atas
+    const approvedItem = allHistoryItems.find(
+      (item) => item.status === "approved"
+    );
+    if (approvedItem) return approvedItem;
+
     return null;
-  }, [activeApprovedId, allHistoryItems, isLemburCompleted]);
+  }, [activeApprovedId, allHistoryItems]);
+
+  // Auto-sync activeApprovedId if activeApprovedOvertime exists
+  useEffect(() => {
+    if (activeApprovedOvertime && activeApprovedId?.toLowerCase() !== activeApprovedOvertime.id.toLowerCase()) {
+      setActiveApprovedId(activeApprovedOvertime.id);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("bisa_lembur_active_id", activeApprovedOvertime.id);
+      }
+    }
+  }, [activeApprovedOvertime, activeApprovedId]);
+
+  // Dynamic summary stats (Yang diajukan & Yang disetujui)
+  const summaryStats = useMemo(() => {
+    let requested = 0;
+    let approved = 0;
+    allHistoryItems.forEach((item) => {
+      const match = String(item.totalHours || "").match(/(\d+(?:\.\d+)?)/);
+      const hours = match ? parseFloat(match[1]) : 3;
+      requested += hours;
+      if (item.status === "approved") {
+        approved += hours;
+      }
+    });
+    return {
+      requested: requested || 3,
+      approved,
+    };
+  }, [allHistoryItems]);
 
   const totalPages = Math.max(1, Math.ceil(allHistoryItems.length / ITEMS));
   const paginated = allHistoryItems.slice((page - 1) * ITEMS, page * ITEMS);
 
-  // Handle Accept Instruction
+  // Handle Accept Instruction (Klik "Ya") -> Munculkan Clock In & Out (Image 2)
   const handleAccept = (id: string) => {
+    const targetInst = instructions.find((n) => n.id === id);
     acceptLemburInstruction(id);
     loadInstructions();
     setActiveApprovedId(id);
@@ -386,13 +432,29 @@ export default function LemburPage() {
       setLemburCheckInTime("");
       setLemburCheckOutTime("");
     }
+
+    // Tambahkan notifikasi ke sistem
+    addNotification({
+      type: "lembur_approved",
+      title: "Pekerjaan Lembur Disetujui",
+      message: `Instruksi lembur "${targetInst?.meta?.instructionTask || targetInst?.title || "Pekerjaan Lembur"}" telah disetujui. Kartu presensi Clock In & Out kini aktif.`,
+      statusBadge: "approved",
+      meta: {
+        requestType: "lembur",
+        category: "Instruksi Lembur",
+        approverName: targetInst?.meta?.instructionFrom || "Atasan",
+        targetUrl: "/lembur",
+      },
+    });
+
     toast.success("Instruksi lembur disetujui!", {
-      description: "Presensi lembur (Clock In / Clock Out) kini aktif.",
+      description: "Presensi lembur (Clock In / Clock Out) kini telah aktif.",
     });
   };
 
-  // Handle Decline Instruction
+  // Handle Decline Instruction (Klik "Tidak")
   const handleDecline = async (id: string) => {
+    const targetInst = instructions.find((n) => n.id === id);
     const Swal = (await import("sweetalert2")).default;
     const { value: reasonText } = await Swal.fire({
       title: "Alasan Menolak Lembur",
@@ -437,6 +499,20 @@ export default function LemburPage() {
     if (reasonText) {
       declineLemburInstruction(id, reasonText);
       loadInstructions();
+
+      addNotification({
+        type: "lembur_rejected",
+        title: "Instruksi Lembur Ditolak",
+        message: `Anda menolak instruksi lembur "${targetInst?.meta?.instructionTask || "Pekerjaan Lembur"}". Alasan: "${reasonText}".`,
+        statusBadge: "rejected",
+        meta: {
+          requestType: "lembur",
+          category: "Instruksi Lembur",
+          declineReason: reasonText,
+          targetUrl: "/lembur",
+        },
+      });
+
       toast.info("Penolakan lembur dicatat dan masuk ke Riwayat Lembur.");
     }
   };
@@ -467,30 +543,27 @@ export default function LemburPage() {
 
   // Calculate Real-time Overtime Duration (Jam, Menit & Detik)
   const calculateDuration = (): string => {
-    if (!lemburCheckInTime) return "0 Jam 0 Menit 0 Detik";
+    if (!lemburCheckInTime) return "0 Jam 0 Menit";
     const inParts = lemburCheckInTime.split(":").map(Number);
     const inH = inParts[0] || 0;
     const inM = inParts[1] || 0;
-    const inS = inParts[2] || 0;
-    const inTotalSec = inH * 3600 + inM * 60 + inS;
+    const inTotalSec = inH * 3600 + inM * 60;
 
     let outTotalSec = inTotalSec;
     if (lemburCheckOutTime) {
       const outParts = lemburCheckOutTime.split(":").map(Number);
       const outH = outParts[0] || 0;
       const outM = outParts[1] || 0;
-      const outS = outParts[2] || 0;
-      outTotalSec = outH * 3600 + outM * 60 + outS;
+      outTotalSec = outH * 3600 + outM * 60;
     } else {
       const now = new Date();
-      outTotalSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+      outTotalSec = now.getHours() * 3600 + now.getMinutes() * 60;
     }
 
     const diffSec = Math.max(0, outTotalSec - inTotalSec);
     const h = Math.floor(diffSec / 3600);
     const m = Math.floor((diffSec % 3600) / 60);
-    const s = diffSec % 60;
-    return `${h} Jam ${m} Menit ${s} Detik`;
+    return `${h} Jam ${m} Menit`;
   };
 
   // Handle Approve a Pending Overtime Request (Simulation / Atasan Menyetujui)
@@ -534,7 +607,20 @@ export default function LemburPage() {
         setLemburCheckInTime("");
         setLemburCheckOutTime("");
         loadCustomRequests();
-        setSelectedItem(null);
+
+        // Tambahkan notifikasi pengajuan disetujui
+        addNotification({
+          type: "lembur_approved",
+          title: "Pengajuan Lembur Disetujui",
+          message: "Pengajuan lembur Anda telah disetujui oleh atasan. Kartu presensi Clock In & Out kini telah aktif.",
+          statusBadge: "approved",
+          meta: {
+            requestType: "lembur",
+            category: "Pengajuan Lembur",
+            approverName: "Budi Santoso (Team Lead)",
+            targetUrl: "/lembur",
+          },
+        });
 
         window.scrollTo({ top: 0, behavior: "smooth" });
         toast.success("Pengajuan lembur disetujui!", {
@@ -557,7 +643,6 @@ export default function LemburPage() {
       setIsLemburCompleted(false);
       setLemburCheckInTime("");
       setLemburCheckOutTime("");
-      setSelectedItem(null);
       window.scrollTo({ top: 0, behavior: "smooth" });
       toast.info("Presensi lembur aktif!", {
         description: "Silakan lakukan Check In lembur.",
@@ -605,7 +690,7 @@ export default function LemburPage() {
             className="w-full h-full object-contain"
           />
         </div>
-        <div className="relative px-4 pt-5 pb-5 flex items-center justify-between">
+        <div className="relative px-4 sm:px-6 md:px-8 pt-5 pb-5 flex items-center justify-between">
           <div className="w-8" />
           <h1 className="text-white font-black italic text-2xl tracking-wide flex-1 text-center">
             Lembur
@@ -622,7 +707,7 @@ export default function LemburPage() {
         <div className="h-4 bg-[#ddeef8] rounded-t-3xl" />
       </div>
 
-      <div className="px-4 -mt-1 pb-6 space-y-3.5 animate-fade-in">
+      <div className="px-4 sm:px-6 md:px-8 -mt-1 pb-6 space-y-3.5 animate-fade-in">
         {/* ══════════════ CARD 1: BULAN & TAHUN (MONTH PICKER) ══════════════ */}
         <MonthYearPicker
           month={month}
@@ -642,7 +727,7 @@ export default function LemburPage() {
               Yang di Ajukan
             </p>
             <p className="text-[23px] font-black italic text-[#156bb8] tracking-tight mt-0.5">
-              {mockOvertimeSummary.totalHoursRequested} Jam
+              {summaryStats.requested} Jam
             </p>
           </div>
 
@@ -652,187 +737,145 @@ export default function LemburPage() {
               Yang di Setujui
             </p>
             <p className="text-[23px] font-black italic text-[#156bb8] tracking-tight mt-0.5">
-              {mockOvertimeSummary.totalHoursApproved} Jam
+              {summaryStats.approved} Jam
             </p>
           </div>
         </div>
 
-        {/* ══════════════ CARD 3: DYNAMIC ACTIVE OVERTIME AREA ══════════════ */}
+        {/* ══════════════ CARD 3: DYNAMIC ACTIVE OVERTIME / INSTRUCTION AREA ══════════════ */}
         
-        {/* KASUS A: LEMBUR DISETUJUI & AKTIF (TAMPILAN REALTIME CLOCK IN & OUT) */}
+        {/* KASUS 1: CLOCK IN & OUT AREA UNTUK LEMBUR YANG DISETUJUI 2 PIHAK (TETAP TAMPIL DI PALING ATAS) */}
         {activeApprovedOvertime && (
-          <div className="bg-gradient-to-b from-blue-100/70 via-blue-50/40 to-white rounded-3xl border border-blue-200/80 shadow-md p-4 sm:p-5 space-y-3.5 transition-all animate-scale-up">
+          <div className="bg-gradient-to-b from-[#d9ebf9] via-[#edf5fc] to-white rounded-3xl border border-[#c4e0f5] shadow-md p-4 sm:p-5 space-y-3.5 transition-all animate-scale-up">
+            {/* Header info status lembur aktif */}
+            <div className="flex items-center justify-between pb-1 border-b border-blue-200/50 gap-2">
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-2.5 py-0.5 rounded-full shadow-2xs shrink-0 whitespace-nowrap">
+                <CheckCircle2 size={11} className="text-emerald-600" />
+                <span>
+                  {activeApprovedOvertime.sourceType === "instruction"
+                    ? "Instruksi Lembur (Disetujui)"
+                    : "Pengajuan Lembur (Disetujui)"}
+                </span>
+              </span>
+              <span className="text-[10.5px] text-slate-500 font-semibold truncate text-right flex-1 min-w-0" title={activeApprovedOvertime.title}>
+                {activeApprovedOvertime.title}
+              </span>
+            </div>
+
             {/* Baris Atas: Jam Besar Realtime & Jadwal Lembur */}
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="text-[34px] font-black text-slate-800 tracking-tight leading-none">
-                  {realtimeClock || "12:12:00"}
+                <h2 className="font-time text-[34px] font-black italic text-slate-800 tracking-tight leading-none">
+                  {realtimeClock || "18.00"} <span className="text-xs font-semibold text-slate-500 font-sans">WIB</span>
                 </h2>
                 <p className="text-[11px] font-semibold text-slate-500 mt-1">
-                  {todayDateFormatted || "Jumat , 11 Sep 2026"}
+                  {todayDateFormatted || "Jumat , 11 Sep 2026"} • {activeApprovedOvertime.workMode || "WFO"}
                 </p>
               </div>
 
               <div className="text-right flex flex-col items-end">
-                <div className="flex items-center gap-1">
-                  <span className="text-xs font-bold text-slate-700">
-                    {activeApprovedOvertime.timeInfo.replace(" WIB", "")}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedItem(activeApprovedOvertime)}
-                    className="w-4 h-4 rounded-full bg-blue-100 text-[#156bb8] flex items-center justify-center hover:bg-blue-200 transition-colors"
-                    title="Detail Jadwal Lembur"
-                  >
-                    <Info size={10} strokeWidth={2.5} />
-                  </button>
-                </div>
+                <span className="font-time text-xs font-bold text-slate-700">
+                  {activeApprovedOvertime.timeInfo.replace(" WIB", "")}
+                </span>
                 <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500 mt-1">
                   <Clock size={12} className="text-blue-500" />
-                  <span>{calculateDuration()}</span>
+                  <span className="font-time">{calculateDuration()}</span>
                 </div>
               </div>
             </div>
 
-            <div className="h-px bg-slate-200/60" />
+            <div className="h-px bg-slate-300/70" />
 
-            {/* Baris Tengah: 2 Box Check In & Check Out */}
+            {/* Baris Tengah: 2 Box Check In & Check Out (Hijau & Pink Lembut) */}
             <div className="grid grid-cols-2 gap-3">
               {/* Check In Box */}
               <button
                 type="button"
                 onClick={handleClockIn}
-                className={`p-3 rounded-2xl border text-center transition-all cursor-pointer active:scale-95 flex flex-col items-center justify-center ${
-                  lemburCheckInTime
-                    ? "bg-emerald-50/70 border-emerald-200 text-emerald-800 shadow-2xs"
-                    : "bg-white hover:bg-blue-50/40 border-slate-200/90 text-slate-700 shadow-sm"
-                }`}
+                className="py-2.5 px-3 rounded-2xl bg-[#dcfce7] hover:bg-[#bbf7d0] border border-[#86efac] shadow-xs text-center cursor-pointer active:scale-95 transition-all flex flex-col items-center justify-center"
               >
-                <span className="text-[10.5px] font-bold text-slate-400 block mb-0.5">
+                <span className="text-[10px] font-semibold text-slate-500 block mb-0.5">
                   Check In
                 </span>
-                <span className="text-[19px] font-black tracking-tight text-slate-800">
+                <span className="font-time text-[21px] font-black tracking-tight text-slate-800">
                   {lemburCheckInTime || "-- : --"}
                 </span>
-                {!lemburCheckInTime && (
-                  <span className="text-[9.5px] font-bold text-[#156bb8] mt-0.5 block">
-                    Klik untuk Check In
-                  </span>
-                )}
               </button>
 
               {/* Check Out Box */}
               <button
                 type="button"
                 onClick={handleClockOut}
-                className={`p-3 rounded-2xl border text-center transition-all cursor-pointer active:scale-95 flex flex-col items-center justify-center ${
-                  lemburCheckOutTime
-                    ? "bg-emerald-50/70 border-emerald-200 text-emerald-800 shadow-2xs"
-                    : "bg-white hover:bg-blue-50/40 border-slate-200/90 text-slate-700 shadow-sm"
-                }`}
+                className="py-2.5 px-3 rounded-2xl bg-[#fee2e2] hover:bg-[#fecaca] border border-[#fca5a5] shadow-xs text-center cursor-pointer active:scale-95 transition-all flex flex-col items-center justify-center"
               >
-                <span className="text-[10.5px] font-bold text-slate-400 block mb-0.5">
+                <span className="text-[10px] font-semibold text-slate-500 block mb-0.5">
                   Check Out
                 </span>
-                <span className="text-[19px] font-black tracking-tight text-slate-800">
+                <span className="font-time text-[21px] font-black tracking-tight text-slate-800">
                   {lemburCheckOutTime || "-- : --"}
                 </span>
-                {lemburCheckInTime && !lemburCheckOutTime && (
-                  <span className="text-[9.5px] font-bold text-rose-600 mt-0.5 block">
-                    Klik untuk Check Out
-                  </span>
-                )}
               </button>
-            </div>
-
-            {/* Baris Lokasi: Menampilkan Lokasi Kantor & Geofence GPS sama seperti Login Reguler */}
-            <div className="flex items-center justify-between text-[11px] bg-white/90 border border-slate-200/80 rounded-2xl px-3 py-2 text-slate-700 shadow-2xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-6 h-6 rounded-lg bg-blue-50 border border-blue-200/70 flex items-center justify-center text-[#156bb8] shrink-0">
-                  <MapPin size={13} className="fill-blue-100" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-bold text-slate-800 text-[11px] truncate">Kantor BISA MEDIA, Kota Tasikmalaya</p>
-                  <p className="text-[9.5px] text-slate-400">Lokasi Presensi Lembur</p>
-                </div>
-              </div>
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100/90 border border-emerald-200 px-2 py-0.5 rounded-md shrink-0 ml-1">
-                Radius 100m ✓
-              </span>
-            </div>
-
-            {/* Baris Bawah: Status Bar / Section Bar */}
-            <div className="w-full py-2 px-3 rounded-xl bg-white/90 border border-slate-200/70 text-center flex items-center justify-between text-xs font-semibold text-slate-600">
-              <span className="italic text-slate-500 text-[11px] truncate">
-                {activeApprovedOvertime.title}
-              </span>
-              <span className="inline-flex items-center gap-1 font-bold text-emerald-600 text-[10.5px] shrink-0 ml-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Lembur Aktif
-              </span>
             </div>
           </div>
         )}
 
-        {/* KASUS B: ADA PERINTAH/INSTRUKSI LEMBUR MENUNGGU PERSETUJUAN */}
+        {/* KASUS 2: PENDING INSTRUCTIONS (PILIHAN YA / TIDAK JIKA ADA INSTRUKSI BELUM DI-ACC) */}
         {pendingInstructions.length > 0 && (
           <div className="space-y-3">
             {pendingInstructions.map((inst) => (
               <div
                 key={inst.id}
-                className="bg-gradient-to-b from-blue-50/70 via-white to-white rounded-3xl border border-blue-200/90 shadow-md p-4 sm:p-5 space-y-3 transition-all animate-scale-up"
+                className="bg-gradient-to-b from-[#d9ebf9] via-[#edf5fc] to-white rounded-3xl border border-[#c4e0f5] shadow-md p-4 sm:p-5 space-y-3 transition-all animate-scale-up"
               >
                 {/* Header Card Instruksi */}
                 <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-[#156bb8] bg-blue-100/90 border border-blue-200/80 px-2.5 py-0.5 rounded-md shadow-2xs">
-                    <span className="w-2 h-2 rounded-xs bg-[#156bb8]" />
-                    Instruksi
+                  <span className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold text-slate-600 bg-white/90 border border-slate-300 px-2.5 py-0.5 rounded-full shadow-2xs">
+                    <FileText size={11} className="text-[#156bb8]" />
+                    <span>Instruksi</span>
                   </span>
                   <span className="text-[10.5px] text-slate-400 font-medium">
-                    {inst.timestamp}
+                    {inst.timestamp || "5 menit yang lalu"}
                   </span>
                 </div>
 
                 {/* Judul Tugas Instruksi */}
-                <h3 className="text-sm sm:text-base font-black italic text-slate-800 leading-snug">
-                  {inst.meta?.instructionTask || inst.title}
+                <h3 className="text-base sm:text-lg font-black italic text-slate-800 leading-snug">
+                  {inst.meta?.instructionTask || inst.title.replace(/^🚨\s*/, "")}
                 </h3>
 
-                {/* Inner Gray/Blue Detail Box */}
-                <div className="p-3 rounded-2xl bg-slate-100/80 border border-slate-200/70 flex items-center justify-between text-[11px] text-slate-600 gap-2">
-                  <div className="space-y-0.5 min-w-0 flex-1">
+                {/* Inner Gray/White Detail Box */}
+                <div className="p-3 rounded-2xl bg-white/70 border border-slate-200/90 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
                     <p className="font-semibold text-slate-700 truncate">
-                      Dari : {inst.meta?.instructionFrom || "Atasan"}
+                      Dari : {inst.meta?.instructionFrom || "Bapak Rahmat"}
                     </p>
-                    <p className="text-slate-500 font-medium text-[10.5px]">
-                      {inst.meta?.instructionDate || "Hari ini"} - {inst.meta?.category?.includes("HR") ? "WFH" : "WFO"}
-                    </p>
+                    <span className="font-bold text-[#156bb8]">
+                      {inst.meta?.instructionHours || "12:00 - 12:00"}
+                    </span>
                   </div>
-                  <span className="font-black text-[#156bb8] text-xs shrink-0 tracking-tight">
-                    {inst.meta?.instructionHours || "17:30 - 21:00"}
-                  </span>
+                  <p className="text-[10.5px] text-slate-500 font-medium">
+                    {inst.meta?.instructionDate || "Sabtu, 04 Oktober 2026"} - {inst.meta?.category?.includes("HR") ? "WFH" : "WFO"}
+                  </p>
                 </div>
 
-                <div className="h-px bg-slate-200/70" />
+                <div className="h-px bg-slate-300/70" />
 
-                {/* Tombol Aksi: Setuju (Hijau Lembut) & Tidak Setuju (Merah Lembut) */}
-                <div className="grid grid-cols-2 gap-3 pt-0.5">
+                {/* Tombol Aksi: Ya (Hijau Lembut) & Tidak (Merah/Pink Lembut) */}
+                <div className="grid grid-cols-2 gap-3 pt-1">
                   <button
                     type="button"
                     onClick={() => handleAccept(inst.id)}
-                    className="py-2.5 px-3 rounded-2xl bg-[#dcfce7] hover:bg-[#bbf7d0] active:bg-[#86efac] text-[#15803d] font-bold text-xs border border-[#86efac] shadow-sm transition-all cursor-pointer active:scale-95 text-center flex items-center justify-center gap-1.5"
+                    className="py-3 px-4 rounded-2xl bg-[#dcfce7] hover:bg-[#bbf7d0] active:scale-95 text-slate-800 font-black italic text-base border border-[#86efac] shadow-xs transition-all cursor-pointer text-center"
                   >
-                    <Check size={14} strokeWidth={2.5} />
-                    <span>Setuju (Siap Lembur)</span>
+                    Ya
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleDecline(inst.id)}
-                    className="py-2.5 px-3 rounded-2xl bg-[#fee2e2] hover:bg-[#fecaca] active:bg-[#fca5a5] text-[#b91c1c] font-bold text-xs border border-[#fca5a5] shadow-sm transition-all cursor-pointer active:scale-95 text-center flex items-center justify-center gap-1.5"
+                    className="py-3 px-4 rounded-2xl bg-[#fee2e2] hover:bg-[#fecaca] active:scale-95 text-slate-800 font-black italic text-base border border-[#fca5a5] shadow-xs transition-all cursor-pointer text-center"
                   >
-                    <X size={14} strokeWidth={2.5} />
-                    <span>Tidak Setuju</span>
+                    Tidak
                   </button>
                 </div>
               </div>
@@ -859,53 +902,49 @@ export default function LemburPage() {
                       ? "bg-emerald-500"
                       : item.status === "rejected"
                       ? "bg-rose-500"
-                      : "bg-amber-500";
+                      : "bg-orange-500"; // PENDING BERWARNA OREN SESUAI PERMINTAAN USER
 
                   return (
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => {
-                        setModalActiveTab("in");
-                        setSelectedItem(item);
-                      }}
+                      onClick={() => router.push(`/lembur/${item.id}`)}
                       className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50/80 active:bg-blue-50/40 transition-colors group cursor-pointer"
                     >
                       {/* Sisi Kiri: Garis Warna Vertikal + Judul & Tanggal */}
                       <div className="flex items-start gap-3 flex-1 min-w-0 pr-3">
                         <div
-                          className={`w-1.5 self-stretch min-h-[36px] rounded-full ${barColor} shrink-0 mt-0.5`}
+                          className={`w-1.5 self-stretch min-h-[38px] rounded-full ${barColor} shrink-0 mt-0.5`}
                         />
 
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <p className="text-[14px] font-bold text-[#156bb8] italic group-hover:text-blue-700 transition-colors leading-tight">
-                              {item.formattedDate}
-                            </p>
-                            {item.sourceType === "instruction" && (
-                              <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-[#156bb8] bg-blue-50 border border-blue-200/80 px-1.5 py-0.5 rounded-md leading-none">
-                                <span className="w-1.5 h-1.5 rounded-xs bg-[#156bb8]" />
+                          {item.sourceType === "instruction" && (
+                            <div className="mb-1">
+                              <span className="inline-flex items-center gap-1 text-[9.5px] font-semibold text-slate-600 bg-white border border-slate-200/90 px-1.5 py-0.5 rounded-md leading-none shadow-2xs">
+                                <FileText size={9} className="text-[#156bb8]" />
                                 Instruksi
                               </span>
-                            )}
-                          </div>
-
-                          <p className="text-[11.5px] text-slate-500 font-semibold italic mt-0.5 truncate">
+                            </div>
+                          )}
+                          <p className="text-[14.5px] font-bold text-slate-800 italic group-hover:text-[#156bb8] transition-colors leading-tight">
                             {item.title}
+                          </p>
+                          <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                            {item.formattedDate}
                           </p>
                         </div>
                       </div>
 
-                      {/* Sisi Kanan: Jam & Chevron Right */}
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <span className="text-[14px] font-bold text-[#3589c5] tracking-wider">
-                          {item.status === "pending"
+                      {/* Sisi Kanan: Jam & Indikator Info i+ */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-time text-[13.5px] font-semibold text-slate-600 tracking-wider">
+                          {item.status === "pending" || !item.checkInTime
                             ? "--:-- - --:--"
                             : item.timeInfo.replace(" WIB", "")}
                         </span>
                         <ChevronRight
                           size={16}
-                          className="text-slate-300 group-hover:text-blue-500 transition-colors shrink-0"
+                          className="text-slate-400 group-hover:text-[#156bb8] transition-colors shrink-0"
                         />
                       </div>
                     </button>
@@ -930,416 +969,6 @@ export default function LemburPage() {
         <span>Ajukan</span>
       </button>
 
-      {/* ══════════════ POPUP MODAL DETAIL LEMBUR KETIKA DIKLIK ══════════════ */}
-      {selectedItem && (() => {
-        const modalActiveCoords = modalActiveTab === "in"
-          ? selectedItem.checkInCoords || { lat: TASIK_LAT, lng: TASIK_LNG }
-          : selectedItem.checkOutCoords || { lat: TASIK_LAT, lng: TASIK_LNG };
-
-        const modalActiveLocation = modalActiveTab === "in"
-          ? selectedItem.checkInLocation || "Kantor BISA MEDIA, Kota Tasikmalaya"
-          : selectedItem.checkOutLocation || "Kantor BISA MEDIA, Kota Tasikmalaya";
-
-        const modalActivePhoto = modalActiveTab === "in"
-          ? selectedItem.checkInPhoto || "/default-face-scan.jpg"
-          : selectedItem.checkOutPhoto || "/default-checkout-scan.jpg";
-
-        const modalActiveTime = modalActiveTab === "in"
-          ? selectedItem.checkInTime || "--:--"
-          : selectedItem.checkOutTime || "--:--";
-
-        const modalActiveNotes = modalActiveTab === "in"
-          ? selectedItem.checkInNotes
-          : selectedItem.checkOutNotes;
-
-        return (
-          <div
-            onClick={() => setSelectedItem(null)}
-            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in select-none"
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white w-full max-w-[400px] rounded-[28px] sm:rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90dvh] animate-scale-up"
-            >
-              {/* Header Modal */}
-              <div className="px-5 pt-4 pb-3 border-b border-slate-100 bg-white flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-flex items-center justify-center font-black text-xs px-2.5 py-0.5 rounded-lg shadow-2xs ${
-                      selectedItem.workMode === "WFO"
-                        ? "bg-blue-100 text-[#156bb8] border border-blue-200"
-                        : "bg-purple-100 text-purple-700 border border-purple-200"
-                    }`}
-                  >
-                    {selectedItem.workMode}
-                  </span>
-                  <h3 className="text-sm font-bold text-slate-800 leading-tight">
-                    Detail Riwayat Lembur
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedItem(null)}
-                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 flex items-center justify-center transition-all cursor-pointer active:scale-95"
-                  aria-label="Tutup"
-                >
-                  <X size={15} />
-                </button>
-              </div>
-
-              {/* Body Modal */}
-              <div className="px-5 py-4 overflow-y-auto space-y-3.5 flex-1 overscroll-contain">
-                {/* Status Banner */}
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                  <div>
-                    <span className="text-[10.5px] font-semibold text-slate-400 block">Kategori</span>
-                    <p className="text-xs font-bold text-slate-700 mt-0.5">
-                      {selectedItem.sourceType === "instruction" ? "🚨 Instruksi Lembur Atasan" : "✍️ Pengajuan Mandiri"}
-                    </p>
-                  </div>
-                  {/* Status Badge with dot */}
-                  <span
-                    className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${
-                      selectedItem.status === "approved"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : selectedItem.status === "rejected"
-                        ? "bg-rose-50 text-rose-700 border-rose-200"
-                        : "bg-amber-50 text-amber-700 border-amber-200"
-                    }`}
-                  >
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        selectedItem.status === "approved"
-                          ? "bg-emerald-500"
-                          : selectedItem.status === "rejected"
-                          ? "bg-rose-500"
-                          : "bg-amber-500"
-                      }`}
-                    />
-                    <span>{selectedItem.statusLabel}</span>
-                  </span>
-                </div>
-
-                {/* Detail Info Card */}
-                <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-3.5 space-y-2.5">
-                  <div>
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                      Pekerjaan / Judul Lembur:
-                    </span>
-                    <p className="text-xs font-bold text-slate-800 mt-0.5 leading-snug">
-                      {selectedItem.title}
-                    </p>
-                  </div>
-
-                  <div className="h-px bg-slate-100" />
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <span className="text-[10.5px] font-medium text-slate-400 block">Tanggal:</span>
-                      <span className="font-bold text-slate-700">{selectedItem.formattedDate}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10.5px] font-medium text-slate-400 block">Mode Kerja:</span>
-                      <span className="font-bold text-[#156bb8]">{selectedItem.workMode}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10.5px] font-medium text-slate-400 block">Jadwal Jam:</span>
-                      <span className="font-bold text-slate-700">{selectedItem.timeInfo}</span>
-                    </div>
-                    {selectedItem.totalHours && (
-                      <div>
-                        <span className="text-[10.5px] font-medium text-slate-400 block">Durasi:</span>
-                        <span className="font-bold text-emerald-600">{selectedItem.totalHours}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Info Tambahan Instruksi Atasan */}
-                  {selectedItem.fromWho && (
-                    <div className="pt-2 border-t border-slate-100 text-xs">
-                      <span className="text-[10.5px] font-medium text-slate-400 block">Instruksi Dari:</span>
-                      <p className="font-bold text-slate-800">
-                        {selectedItem.fromWho} {selectedItem.role ? `(${selectedItem.role})` : ""}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Alasan Penolakan jika Ditolak */}
-                  {selectedItem.declineReason && (
-                    <div className="pt-2 border-t border-rose-100 text-xs text-rose-800">
-                      <span className="text-[10.5px] font-bold text-rose-600 block">Alasan Penolakan:</span>
-                      <p className="font-medium mt-0.5 leading-snug text-rose-700 bg-rose-50 p-2 rounded-xl border border-rose-200/60">
-                        {selectedItem.declineReason}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* ══════════════ DOKUMENTASI PRESENSI & VERIFIKASI LOKASI (CLOCK IN & OUT) ══════════════ */}
-                {selectedItem.status === "approved" && (
-                  <div className="space-y-3">
-                    {/* 1. TAB SWITCHER (Clock In vs Clock Out) */}
-                    <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 border border-slate-200/80 shadow-2xs">
-                      <button
-                        type="button"
-                        onClick={() => setModalActiveTab("in")}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          modalActiveTab === "in"
-                            ? "bg-[#156bb8] text-white shadow-sm"
-                            : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-                        }`}
-                      >
-                        <LogIn
-                          size={14}
-                          strokeWidth={2.5}
-                          className={modalActiveTab === "in" ? "text-emerald-300" : "text-emerald-600"}
-                        />
-                        <div className="text-left">
-                          <p className="leading-tight text-[11px]">Clock In</p>
-                          <p className={`text-[9.5px] ${modalActiveTab === "in" ? "text-blue-100" : "text-slate-400"} font-normal`}>
-                            {selectedItem.checkInTime || "--:--"} WIB
-                          </p>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setModalActiveTab("out")}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          modalActiveTab === "out"
-                            ? "bg-[#156bb8] text-white shadow-sm"
-                            : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-                        }`}
-                      >
-                        <LogOut
-                          size={14}
-                          strokeWidth={2.5}
-                          className={modalActiveTab === "out" ? "text-rose-300" : "text-rose-600"}
-                        />
-                        <div className="text-left">
-                          <p className="leading-tight text-[11px]">Clock Out</p>
-                          <p className={`text-[9.5px] ${modalActiveTab === "out" ? "text-blue-100" : "text-slate-400"} font-normal`}>
-                            {selectedItem.checkOutTime || "--:--"} WIB
-                          </p>
-                        </div>
-                      </button>
-                    </div>
-
-                    {/* Label Dokumentasi */}
-                    <div className="flex items-center justify-between px-1">
-                      <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-[#156bb8]" />
-                        Dokumentasi {modalActiveTab === "in" ? "Clock In (Masuk)" : "Clock Out (Pulang)"}
-                      </p>
-                      <span className="text-[10px] font-semibold text-[#156bb8] bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
-                        {modalActiveTab === "in" ? "Foto & GPS Clock In" : "Foto & GPS Clock Out"}
-                      </span>
-                    </div>
-
-                    {/* 2. DUA KOLOM SEJAJAR: PETA REALTIME LOKASI & FOTO SCAN MUKA BIOMETRIK */}
-                    <div className="grid grid-cols-2 gap-2.5 items-stretch">
-                      {/* 1. KOTAK KIRI: REALTIME OPENSTREETMAP DENGAN GEOFENCE 100M */}
-                      <div className="relative h-36 rounded-2xl bg-white overflow-hidden border border-[#c8d8e8] shadow-2xs flex flex-col justify-between p-2 group">
-                        <div className="absolute inset-0 bg-[#e8f0f7] overflow-hidden">
-                          <iframe
-                            title={`Peta Lokasi Lembur ${modalActiveTab === "in" ? "Clock In" : "Clock Out"}`}
-                            src={`https://www.openstreetmap.org/export/embed.html?bbox=${modalActiveCoords.lng - 0.0025}%2C${modalActiveCoords.lat - 0.0018}%2C${modalActiveCoords.lng + 0.0025}%2C${modalActiveCoords.lat + 0.0018}&layer=mapnik`}
-                            className="w-full h-full border-0 pointer-events-none filter saturate-125"
-                            loading="lazy"
-                          />
-
-                          {/* Geofence 100m Aura Circle */}
-                          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                            <div className="w-20 h-20 rounded-full border-2 border-dashed border-blue-500/80 bg-blue-500/10 flex items-center justify-center">
-                              <div className="w-10 h-10 rounded-full border border-blue-400/40 bg-blue-400/15" />
-                            </div>
-                          </div>
-
-                          {/* Pin Marker Merah */}
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full flex flex-col items-center pointer-events-none z-10">
-                            <div className="w-5 h-5 rounded-full bg-red-600 border-2 border-white shadow-md flex items-center justify-center text-white">
-                              <MapPin size={11} strokeWidth={2.5} className="fill-white" />
-                            </div>
-                            <div className="w-0 h-0 border-l-[3px] border-r-[3px] border-t-[5px] border-transparent border-t-red-600 -mt-0.5" />
-                          </div>
-                        </div>
-
-                        {/* Top Pill Badge */}
-                        <div className="relative z-10 flex items-center justify-between">
-                          <span className="bg-black/70 backdrop-blur-xs text-white text-[7.5px] font-bold px-1.5 py-0.5 rounded-md shadow-xs flex items-center gap-1">
-                            <Navigation size={8} className={modalActiveTab === "in" ? "text-emerald-400" : "text-rose-400"} />
-                            <span>{modalActiveTab === "in" ? "Lokasi In" : "Lokasi Out"}</span>
-                          </span>
-                          <span className="bg-white/95 text-[#156bb8] text-[7.5px] font-bold px-1.5 py-0.5 rounded shadow-2xs">
-                            GPS 15m
-                          </span>
-                        </div>
-
-                        {/* Bottom Location Label */}
-                        <div className="relative z-10 mt-auto bg-white/95 backdrop-blur-xs px-2 py-1 rounded-lg border border-slate-200 shadow-xs">
-                          <p className="text-[7px] text-slate-500 leading-tight">Titik {modalActiveTab === "in" ? "Clock In" : "Clock Out"}:</p>
-                          <p className="text-[8.5px] font-bold text-slate-800 truncate leading-tight mt-0.5">
-                            {modalActiveLocation.split(",")[0] || "Kantor BISA MEDIA"}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* 2. KOTAK KANAN: FOTO HASIL SCAN MUKA BIOMETRIK */}
-                      <div
-                        onClick={() => setPreviewPhotoModal(modalActivePhoto)}
-                        className="relative h-36 rounded-2xl bg-slate-900 overflow-hidden border border-[#c8d8e8] shadow-2xs cursor-pointer group"
-                      >
-                        <img
-                          src={modalActivePhoto}
-                          alt="Foto Dokumentasi Lembur"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 pointer-events-none" />
-                        <div className="absolute top-1.5 left-1.5 z-10">
-                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md shadow-sm backdrop-blur-xs flex items-center gap-1 text-white ${
-                            modalActiveTab === "in" ? "bg-emerald-600/95" : "bg-rose-600/95"
-                          }`}>
-                            <ShieldCheck size={9} />
-                            <span>{modalActiveTab === "in" ? "Scan In" : "Scan Out"}</span>
-                          </span>
-                        </div>
-                        <div className="absolute bottom-1.5 right-1.5 z-10 flex items-center gap-1 bg-black/60 px-1.5 py-0.5 rounded text-[8px] text-white">
-                          <Maximize2 size={8} />
-                          <span>{modalActiveTime} WIB</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Alamat Lengkap & Catatan Presensi */}
-                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 text-[11px] space-y-1">
-                      <p className="text-slate-700 leading-tight">
-                        <strong className="text-slate-900">Alamat Terverifikasi:</strong> {modalActiveLocation}
-                      </p>
-                      {modalActiveNotes && (
-                        <p className="text-slate-600 leading-tight pt-1 border-t border-slate-200/60">
-                          <strong className="text-slate-800">Catatan:</strong> {modalActiveNotes}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Alur Persetujuan (khusus pengajuan mandiri jika ada) */}
-                {selectedItem.approvalTimeline && selectedItem.approvalTimeline.length > 0 && (
-                  <div className="rounded-2xl border border-slate-100 bg-white p-3.5 space-y-2">
-                    <span className="text-[11px] font-bold text-slate-700 block">
-                      Alur Persetujuan:
-                    </span>
-                    <div className="space-y-2 mt-1">
-                      {selectedItem.approvalTimeline.map((step, idx) => (
-                        <div key={step.id || idx} className="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50 border border-slate-100/80">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
-                              step.status === "approved"
-                                ? "bg-emerald-100 text-emerald-600"
-                                : step.status === "rejected" || step.status === "cancelled"
-                                ? "bg-rose-100 text-rose-600"
-                                : "bg-amber-100 text-amber-600"
-                            }`}>
-                              {step.status === "approved" ? (
-                                <Check size={13} strokeWidth={2.5} />
-                              ) : step.status === "rejected" || step.status === "cancelled" ? (
-                                <X size={13} strokeWidth={2.5} />
-                              ) : (
-                                <Clock size={13} strokeWidth={2.5} />
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-bold text-slate-800 text-[11.5px] truncate">{step.approverName}</p>
-                              <p className="text-[10px] text-slate-400">{step.role}</p>
-                            </div>
-                          </div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                            step.status === "approved"
-                              ? "text-emerald-700 bg-emerald-50"
-                              : step.status === "rejected" || step.status === "cancelled"
-                              ? "text-rose-700 bg-rose-50"
-                              : "text-amber-700 bg-amber-50"
-                          }`}>
-                            {step.status === "approved" ? "Disetujui" : step.status === "rejected" || step.status === "cancelled" ? "Dibatalkan" : "Menunggu"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer Modal */}
-              <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/80 shrink-0 flex flex-col gap-2">
-                {selectedItem.status === "pending" && (
-                  <button
-                    type="button"
-                    onClick={() => handleApprovePendingRequest(selectedItem.id)}
-                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-md shadow-emerald-600/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                  >
-                    <Sparkles size={14} />
-                    <span>⚡ Setujui Pengajuan Ini (Munculkan Clock In & Out)</span>
-                  </button>
-                )}
-
-                {selectedItem.status === "approved" && activeApprovedId !== selectedItem.id && (
-                  <button
-                    type="button"
-                    onClick={() => handleActivateApprovedOvertime(selectedItem.id)}
-                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#1a7dc4] to-[#156bb8] text-white font-bold text-xs shadow-md shadow-blue-500/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                  >
-                    <LogIn size={14} />
-                    <span>🚀 Buka Presensi Lembur (Clock In & Out)</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedItem(null)}
-                  className="w-full py-2 px-3 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs transition-all cursor-pointer active:scale-95 text-center"
-                >
-                  Tutup
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ══════════════ MODAL PREVIEW FOTO SCAN FULLSCREEN ══════════════ */}
-      {previewPhotoModal && (
-        <div
-          onClick={() => setPreviewPhotoModal(null)}
-          className="fixed inset-0 z-60 bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-md animate-fade-in"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative max-w-sm w-full bg-slate-900 rounded-3xl overflow-hidden border border-white/20 shadow-2xl"
-          >
-            <div className="p-3 border-b border-white/10 flex items-center justify-between">
-              <span className="text-white text-xs font-bold flex items-center gap-1.5">
-                <ShieldCheck size={14} className="text-emerald-400" />
-                Dokumentasi Biometrik Lembur
-              </span>
-              <button
-                type="button"
-                onClick={() => setPreviewPhotoModal(null)}
-                className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-sm cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-3">
-              <img
-                src={previewPhotoModal}
-                alt="Preview Dokumentasi"
-                className="w-full rounded-2xl object-cover max-h-[65vh]"
-              />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

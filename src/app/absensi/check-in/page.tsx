@@ -137,16 +137,13 @@ function CheckInContent() {
       const now = new Date();
       const h = String(now.getHours()).padStart(2, "0");
       const m = String(now.getMinutes()).padStart(2, "0");
-      const s = String(now.getSeconds()).padStart(2, "0");
       setCurrentTimeStr(
-        now.toLocaleTimeString("en-US", {
+        now.toLocaleTimeString("id-ID", {
           hour: "2-digit",
           minute: "2-digit",
-          second: "2-digit",
-          hour12: true,
         })
       );
-      setCurrentTimeShort(`${h}:${m}:${s}`);
+      setCurrentTimeShort(`${h}:${m}`);
       setCurrentDateStr(
         now.toLocaleDateString("id-ID", {
           weekday: "short",
@@ -646,6 +643,7 @@ function CheckInContent() {
       currentData.checkOutCoords = effectiveCoords;
       currentData.checkOutPhoto = effectivePhoto;
       currentData.checkOutNotes = catatan ? catatan.trim() : "";
+      (currentData as any).checkOutDistance = distanceMeters;
       try {
         localStorage.setItem("bisa_attendance_checkout_photo", effectivePhoto);
         localStorage.setItem("bisa_attendance_checkout_location", effectiveLocation);
@@ -654,6 +652,7 @@ function CheckInContent() {
           "bisa_attendance_checkout_notes",
           catatan ? catatan.trim() : ""
         );
+        localStorage.setItem("bisa_attendance_checkout_distance", String(distanceMeters));
       } catch (err) {
         console.warn("Storage quota warning", err);
       }
@@ -663,6 +662,7 @@ function CheckInContent() {
       currentData.checkInCoords = effectiveCoords;
       currentData.checkInPhoto = effectivePhoto;
       currentData.checkInNotes = catatan ? catatan.trim() : "";
+      (currentData as any).checkInDistance = distanceMeters;
       try {
         localStorage.setItem("bisa_attendance_checkin_photo", effectivePhoto);
         localStorage.setItem("bisa_attendance_checkin_location", effectiveLocation);
@@ -671,6 +671,7 @@ function CheckInContent() {
           "bisa_attendance_checkin_notes",
           catatan ? catatan.trim() : ""
         );
+        localStorage.setItem("bisa_attendance_checkin_distance", String(distanceMeters));
       } catch (err) {
         console.warn("Storage quota warning", err);
       }
@@ -1157,7 +1158,7 @@ function CheckInContent() {
                             <p className="text-[9px] text-white/70 font-medium leading-none">
                               Mulai Istirahat
                             </p>
-                            <p className="font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
+                            <p className="font-time font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
                               {isBreakEnd
                                 ? existingBreakStart || "12:00"
                                 : currentTimeStr || "-- : --"}
@@ -1179,7 +1180,7 @@ function CheckInContent() {
                             <p className="text-[9px] text-white/70 font-medium leading-none">
                               Selesai Istirahat
                             </p>
-                            <p className="font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
+                            <p className="font-time font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
                               {isBreakEnd ? currentTimeStr || "-- : --" : "-- : --"}
                             </p>
                           </div>
@@ -1199,8 +1200,8 @@ function CheckInContent() {
                           </div>
                           <div>
                             <p className="text-[9px] text-white/70 font-medium leading-none">Clock In</p>
-                            <p className="font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
-                              {isCheckOut ? "07:59 AM" : currentTimeStr || "-- : --"}
+                            <p className="font-time font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
+                              {isCheckOut ? "07:59" : currentTimeStr || "-- : --"}
                             </p>
                           </div>
                         </div>
@@ -1217,7 +1218,7 @@ function CheckInContent() {
                           </div>
                           <div>
                             <p className="text-[9px] text-white/70 font-medium leading-none">Clock Out</p>
-                            <p className="font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
+                            <p className="font-time font-bold text-[13px] tracking-wider text-white mt-0.5 leading-none">
                               {isCheckOut ? currentTimeStr || "-- : --" : "-- : --"}
                             </p>
                           </div>

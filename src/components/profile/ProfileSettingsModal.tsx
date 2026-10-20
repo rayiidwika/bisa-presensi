@@ -20,8 +20,10 @@ import {
   getUserProfile,
   saveUserProfile,
   changeUserPassword,
+  compressImageFile,
   UserProfile,
 } from "@/lib/userProfile";
+import AvatarCropModal from "./AvatarCropModal";
 
 interface ProfileSettingsModalProps {
   isOpen: boolean;
@@ -50,6 +52,11 @@ export default function ProfileSettingsModal({
   const [showNewPass, setShowNewPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
+
+  // Instagram-style Crop Modal State
+  const [cropImageSrc, setCropImageSrc] = useState<string>("");
+  const [isCropOpen, setIsCropOpen] = useState<boolean>(false);
 
   // Sync profile when opened
   useEffect(() => {
@@ -97,26 +104,28 @@ export default function ProfileSettingsModal({
 
   if (!isOpen) return null;
 
-  // Handle Photo Upload
+  // Handle Photo Upload: Buka Instagram-style Cropper untuk menggeser & menyesuaikan area foto
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 3 * 1024 * 1024) {
-      toast.error("Ukuran foto maksimal 3MB");
-      return;
-    }
-
     const reader = new FileReader();
-    reader.onload = (evt) => {
-      const base64 = evt.target?.result as string;
-      if (base64) {
-        setAvatarPreview(base64);
-        setProfileForm((prev) => ({ ...prev, avatarUrl: base64 }));
-        toast.success("Foto berhasil dipilih");
+    reader.onload = (loadEvt) => {
+      const src = loadEvt.target?.result as string;
+      if (src) {
+        setCropImageSrc(src);
+        setIsCropOpen(true);
       }
     };
     reader.readAsDataURL(file);
+    if (e.target) e.target.value = "";
+  };
+
+  const handleCropComplete = (croppedBase64: string) => {
+    setAvatarPreview(croppedBase64);
+    setProfileForm((prev) => ({ ...prev, avatarUrl: croppedBase64 }));
+    setIsCropOpen(false);
+    toast.success("Foto profil berhasil disesuaikan & dioptimasi!");
   };
 
   const handleRemovePhoto = () => {
@@ -246,7 +255,11 @@ export default function ProfileSettingsModal({
               <div className="p-4 rounded-2xl bg-gradient-to-b from-blue-50/70 to-slate-50 border border-blue-100 flex flex-col items-center justify-center text-center gap-3">
                 <div className="relative">
                   <div className="w-20 h-20 rounded-full bg-white border-2 border-[#156bb8] shadow-md flex items-center justify-center overflow-hidden">
-                    {avatarPreview ? (
+                    {isCompressingPhoto ? (
+                      <div className="w-full h-full bg-blue-50 flex items-center justify-center">
+                        <div className="w-6 h-6 border-2 border-[#156bb8] border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    ) : avatarPreview ? (
                       <img
                         src={avatarPreview}
                         alt="Foto Profil"
@@ -265,8 +278,9 @@ export default function ProfileSettingsModal({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#156bb8] text-white flex items-center justify-center shadow-md hover:scale-110 active:scale-90 transition-transform cursor-pointer"
-                    title="Ganti Foto"
+                    disabled={isCompressingPhoto}
+                    className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#156bb8] text-white flex items-center justify-center shadow-md hover:scale-110 active:scale-90 transition-transform cursor-pointer disabled:opacity-50"
+                    title="Ganti Foto (Otomatis Kompres)"
                   >
                     <Camera size={13} strokeWidth={2.5} />
                   </button>
@@ -284,11 +298,12 @@ export default function ProfileSettingsModal({
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="text-xs font-bold text-[#156bb8] bg-white hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl cursor-pointer transition-colors shadow-2xs"
+                      disabled={isCompressingPhoto}
+                      className="text-xs font-bold text-[#156bb8] bg-white hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl cursor-pointer transition-colors shadow-2xs disabled:opacity-50"
                     >
-                      Pilih Foto Profil
+                      {isCompressingPhoto ? "Mengompres..." : "Pilih Foto Profil"}
                     </button>
-                    {avatarPreview && (
+                    {avatarPreview && !isCompressingPhoto && (
                       <button
                         type="button"
                         onClick={handleRemovePhoto}
@@ -299,6 +314,9 @@ export default function ProfileSettingsModal({
                       </button>
                     )}
                   </div>
+                  <p className="text-[11px] text-slate-400 font-medium mt-1.5">
+                    Semua ukuran foto otomatis dikompres & dioptimasi
+                  </p>
                 </div>
               </div>
 
@@ -451,6 +469,16 @@ export default function ProfileSettingsModal({
           </button>
         </div>
       </div>
+
+      {/* ══════════════ INSTAGRAM-STYLE AVATAR CROPPER MODAL ══════════════ */}
+      {isCropOpen && (
+        <AvatarCropModal
+          isOpen={isCropOpen}
+          imageSrc={cropImageSrc}
+          onClose={() => setIsCropOpen(false)}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </div>
   );
 }

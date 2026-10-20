@@ -44,7 +44,7 @@ export default function TambahLemburPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof OvertimeFormData, string>>>({});
   const [loading, setLoading] = useState(false);
 
-  const [autoApprove, setAutoApprove] = useState(true);
+  const [autoApprove, setAutoApprove] = useState(false);
 
   const hours = form.startTime && form.endTime ? calcHours(form.startTime, form.endTime) : 0;
 

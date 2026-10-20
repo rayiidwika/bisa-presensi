@@ -42,11 +42,11 @@ export interface AppNotification {
 const STORAGE_KEY = "bisa_notifications";
 
 export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
-  // ── 1. Pending Instructions (Siap Dikonfirmasi oleh Karyawan) ──
+  // ── 1. Instruksi Lembur (Belum di-ACC / Pending Acceptance) ──
   {
     id: "notif-inst-01",
     type: "lembur_instruction",
-    title: "🚨 Instruksi Lembur: Maintenance Database & Deployment v2.4",
+    title: "🚨 Instruksi Lembur: Maintenance Database",
     message: "Bpk. Rahmat Hidayat (Head of IT) menugaskan Anda untuk lembur maintenance database & deployment update v2.4.",
     timestamp: "Baru saja",
     createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
@@ -54,278 +54,37 @@ export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
     statusBadge: "instruction",
     meta: {
       requestType: "lembur",
-      category: "Perintah Lembur Atasan",
+      category: "Instruksi Lembur",
       instructionFrom: "Bpk. Rahmat Hidayat",
       instructionRole: "Head of IT & Infrastructure",
       instructionDate: "Sabtu, 04 Oktober 2026",
-      instructionHours: "17:30 - 21:00 WIB",
-      instructionDuration: "3.5 Jam",
-      instructionTask: "Maintenance darurat server database, sinkronisasi presensi cabang, dan monitoring deployment presensi update v2.4.",
-      instructionStatus: "pending_acceptance",
-      targetUrl: "/lembur",
-    },
-  },
-  {
-    id: "notif-inst-02",
-    type: "lembur_instruction",
-    title: "🚨 Instruksi Lembur: Patching Security Kernel & Load Balancer",
-    message: "Bpk. Hendra Gunawan (Lead DevOps) menginstruksikan lembur patching security kernel server cloud & routing balancer.",
-    timestamp: "15 menit yang lalu",
-    createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    isRead: false,
-    statusBadge: "instruction",
-    meta: {
-      requestType: "lembur",
-      category: "Perintah Lembur DevOps",
-      instructionFrom: "Bpk. Hendra Gunawan",
-      instructionRole: "Lead DevOps Engineer",
-      instructionDate: "Sabtu, 04 Oktober 2026",
-      instructionHours: "21:00 - 23:30 WIB",
-      instructionDuration: "2.5 Jam",
-      instructionTask: "Patching security kernel server cloud & konfigurasi load balancer gateway cabang.",
-      instructionStatus: "pending_acceptance",
-      targetUrl: "/lembur",
-    },
-  },
-  {
-    id: "notif-inst-03",
-    type: "lembur_instruction",
-    title: "🚨 Instruksi Lembur: Finalisasi Migrasi Data & Audit QA",
-    message: "Ibu Dian Pratiwi (QA Lead) menginstruksikan lembur audit validasi integrasi pembayaran dan migrasi data.",
-    timestamp: "1 jam yang lalu",
-    createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    isRead: false,
-    statusBadge: "instruction",
-    meta: {
-      requestType: "lembur",
-      category: "Perintah Lembur QA",
-      instructionFrom: "Ibu Dian Pratiwi",
-      instructionRole: "Quality Assurance Lead",
-      instructionDate: "Minggu, 05 Oktober 2026",
-      instructionHours: "13:00 - 16:30 WIB",
-      instructionDuration: "3.5 Jam",
-      instructionTask: "Audit menyeluruh endpoint payment gateway dan migrasi rekap data presensi karyawan cabang.",
+      instructionHours: "18:00 - 21:00 WIB",
+      instructionDuration: "3 Jam",
+      instructionTask: "Maintenance darurat server database, sinkronisasi presensi cabang, dan monitoring deployment update.",
       instructionStatus: "pending_acceptance",
       targetUrl: "/lembur",
     },
   },
 
-  // ── 2. Responded Instructions (Disetujui & Masuk Riwayat) ──
-  {
-    id: "notif-inst-04",
-    type: "lembur_instruction",
-    title: "🚨 Instruksi Lembur: Backup Migrasi Cloud",
-    message: "Ibu Siti Rahayu (HR & Ops Lead) menginstruksikan lembur rekapitulasi data & pendampingan tim teknis.",
-    timestamp: "Kemarin, 18:00",
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
-    statusBadge: "instruction",
-    meta: {
-      requestType: "lembur",
-      category: "Perintah Lembur HR",
-      instructionFrom: "Ibu Siti Rahayu",
-      instructionRole: "HR & Operations Lead",
-      instructionDate: "Jumat, 03 Oktober 2026",
-      instructionHours: "18:00 - 20:30 WIB",
-      instructionDuration: "2.5 Jam",
-      instructionTask: "Verifikasi berkas laporan lembur bulanan dan pendampingan migrasi database ke private cloud.",
-      instructionStatus: "accepted",
-      targetUrl: "/lembur",
-    },
-  },
-  {
-    id: "notif-inst-05",
-    type: "lembur_instruction",
-    title: "🚨 Instruksi Lembur: Regression Testing Mobile v2.5",
-    message: "Ibu Dian Pratiwi (QA Lead) menginstruksikan lembur validasi rilis mobile update v2.5.",
-    timestamp: "3 hari yang lalu",
-    createdAt: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
-    statusBadge: "instruction",
-    meta: {
-      requestType: "lembur",
-      category: "Perintah Lembur QA",
-      instructionFrom: "Ibu Dian Pratiwi",
-      instructionRole: "Quality Assurance Lead",
-      instructionDate: "Rabu, 01 Oktober 2026",
-      instructionHours: "17:00 - 20:00 WIB",
-      instructionDuration: "3 Jam",
-      instructionTask: "Regression testing & validasi payment gateway sebelum release versi mobile v2.5.",
-      instructionStatus: "accepted",
-      targetUrl: "/lembur",
-    },
-  },
-  {
-    id: "notif-inst-06",
-    type: "lembur_instruction",
-    title: "🚨 Instruksi Lembur: Monitoring Server Deployment Cabang",
-    message: "Bpk. Rahmat Hidayat (Head of IT) menugaskan lembur monitoring live deployment server cabang.",
-    timestamp: "4 hari yang lalu",
-    createdAt: new Date(Date.now() - 96 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
-    statusBadge: "instruction",
-    meta: {
-      requestType: "lembur",
-      category: "Perintah Lembur IT",
-      instructionFrom: "Bpk. Rahmat Hidayat",
-      instructionRole: "Head of IT & Infrastructure",
-      instructionDate: "Selasa, 30 September 2026",
-      instructionHours: "19:00 - 22:00 WIB",
-      instructionDuration: "3 Jam",
-      instructionTask: "Monitoring sinkronisasi data presensi biometrik pada server cabang baru.",
-      instructionStatus: "accepted",
-      targetUrl: "/lembur",
-    },
-  },
-
-  // ── 3. Declined Instructions (Ditolak beserta Alasan) ──
-  {
-    id: "notif-inst-07",
-    type: "lembur_instruction",
-    title: "🚨 Instruksi Lembur: Penanganan Server Cabang",
-    message: "Bpk. Budi Santoso (Supervisor) menugaskan lembur troubleshooting jaringan server cabang Surabaya.",
-    timestamp: "2 hari yang lalu",
-    createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
-    statusBadge: "instruction",
-    meta: {
-      requestType: "lembur",
-      category: "Perintah Lembur Atasan",
-      instructionFrom: "Bpk. Budi Santoso",
-      instructionRole: "Technical Supervisor",
-      instructionDate: "Kamis, 02 Oktober 2026",
-      instructionHours: "19:00 - 22:00 WIB",
-      instructionDuration: "3 Jam",
-      instructionTask: "Remote troubleshooting switch router dan konektivitas VPN antar cabang.",
-      instructionStatus: "declined",
-      declineReason: "Kondisi kesehatan kurang fit dan sedang istirahat pemulihan pasca dinas luar kota.",
-      targetUrl: "/lembur",
-    },
-  },
-  {
-    id: "notif-inst-08",
-    type: "lembur_instruction",
-    title: "🚨 Instruksi Lembur: Rekapitulasi Berkas Fisik HR & Payroll",
-    message: "Ibu Siti Rahayu (HR Manager) menugaskan lembur audit dokumen fisik berkas karyawan.",
-    timestamp: "5 hari yang lalu",
-    createdAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
-    statusBadge: "instruction",
-    meta: {
-      requestType: "lembur",
-      category: "Perintah Lembur HR",
-      instructionFrom: "Ibu Siti Rahayu",
-      instructionRole: "HR Manager",
-      instructionDate: "Senin, 29 September 2026",
-      instructionHours: "18:00 - 20:00 WIB",
-      instructionDuration: "2 Jam",
-      instructionTask: "Audit dan verifikasi manual berkas fisik payroll serta tanda tangan kontrak.",
-      instructionStatus: "declined",
-      declineReason: "Ada keperluan keluarga mendesak yang telah dijadwalkan sebelumnya dan tidak bisa digeser.",
-      targetUrl: "/lembur",
-    },
-  },
-
-  // ── 4. Pengajuan Cuti, Izin, Sakit & Lembur Mandiri ──
-  {
-    id: "notif-apr-01",
-    type: "pengajuan_approved",
-    title: "✅ Pengajuan Cuti Disetujui",
-    message: "Pengajuan Cuti Tahunan Anda (28 - 29 Sep 2026 • 2 Hari) telah disetujui oleh HRD.",
-    timestamp: "5 hari yang lalu",
-    createdAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
-    statusBadge: "approved",
-    meta: {
-      requestType: "cuti",
-      category: "Cuti Tahunan",
-      approverName: "Siti Rahayu (HR Manager)",
-      targetUrl: "/pengajuan",
-    },
-  },
-  {
-    id: "notif-apr-02",
-    type: "lembur_approved",
-    title: "✅ Pengajuan Lembur Disetujui",
-    message: "Pengajuan lembur mandiri Anda untuk 26 Sep 2026 (17:00 - 20:00 • 3 Jam) telah disetujui oleh Team Lead & HR.",
-    timestamp: "6 hari yang lalu",
-    createdAt: new Date(Date.now() - 144 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
-    statusBadge: "approved",
-    meta: {
-      requestType: "lembur",
-      category: "Lembur Proyek",
-      approverName: "Budi Santoso & Siti Rahayu",
-      targetUrl: "/lembur",
-    },
-  },
-  {
-    id: "notif-rej-01",
-    type: "pengajuan_rejected",
-    title: "❌ Pengajuan Izin Ditolak",
-    message: "Pengajuan Izin Keperluan Keluarga Anda pada 25 Sep 2026 ditolak oleh atasan.",
-    timestamp: "7 hari yang lalu",
-    createdAt: new Date(Date.now() - 168 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
-    statusBadge: "rejected",
-    meta: {
-      requestType: "izin",
-      category: "Izin Keperluan Keluarga",
-      approverName: "Budi Santoso (Team Lead)",
-      rejectedReason: "Kuota izin berbayar bulan ini sudah habis. Silakan ajukan menggunakan kompensasi lembur atau cuti tahunan.",
-      targetUrl: "/pengajuan",
-    },
-  },
-  {
-    id: "notif-rej-02",
-    type: "lembur_rejected",
-    title: "❌ Pengajuan Lembur Ditolak",
-    message: "Pengajuan lembur Anda untuk 25 Sep 2026 (WFH • 3 Jam) tidak disetujui.",
-    timestamp: "7 hari yang lalu",
-    createdAt: new Date(Date.now() - 172 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
-    statusBadge: "rejected",
-    meta: {
-      requestType: "lembur",
-      category: "Lembur WFH",
-      approverName: "Budi Santoso (Team Lead)",
-      rejectedReason: "Pekerjaan laporan akhir bulan disarankan diselesaikan pada jam kerja normal kantor.",
-      targetUrl: "/lembur",
-    },
-  },
+  // ── 2. Mengajukan (Pengajuan Lembur Mandiri Menunggu Persetujuan) ──
   {
     id: "notif-sub-01",
-    type: "pengajuan_submitted",
-    title: "⏳ Pengajuan Sakit Sedang Diproses",
-    message: "Pengajuan Sakit Anda (20 - 21 Sep 2026 • Surat Dokter Terlampir) dalam antrean verifikasi HRD.",
-    timestamp: "8 hari yang lalu",
-    createdAt: new Date(Date.now() - 192 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
-    statusBadge: "pending",
-    meta: {
-      requestType: "sakit",
-      category: "Cuti Sakit",
-      targetUrl: "/pengajuan",
-    },
-  },
-  {
-    id: "notif-sub-02",
-    type: "pengajuan_submitted",
-    title: "⏳ Pengajuan Lembur Menunggu Verifikasi",
-    message: "Pengajuan Lembur Anda (24 Sep 2026 • Integrasi API Payment) sedang dalam antrean review Team Lead.",
-    timestamp: "9 hari yang lalu",
-    createdAt: new Date(Date.now() - 216 * 60 * 60 * 1000).toISOString(),
-    isRead: true,
+    type: "lembur_submitted",
+    title: "⏳ Pengajuan Lembur Menunggu Persetujuan",
+    message: "Pengajuan lembur Anda untuk tanggal 26 Sep 2026 (18:00 - 21:00 • 3 Jam) sedang dalam proses verifikasi dan persetujuan atasan.",
+    timestamp: "10 menit yang lalu",
+    createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    isRead: false,
     statusBadge: "pending",
     meta: {
       requestType: "lembur",
-      category: "Lembur Integrasi API",
+      category: "Pengajuan Lembur",
       targetUrl: "/lembur",
     },
   },
 ];
 
-const DATA_VERSION = "bisa_notif_v8";
+const DATA_VERSION = "bisa_notif_v10";
 
 /** Reset seluruh notifikasi & instruksi ke data dummy awal */
 export function resetNotificationsToDefault(): AppNotification[] {
@@ -498,142 +257,67 @@ export async function showNotificationPopup() {
       : "";
 
     if (isInstruction) {
-      const isAccepted = item.meta?.instructionStatus === "accepted";
-      const isDeclined = item.meta?.instructionStatus === "declined";
-
       return `
-        <div class="notif-card p-3 rounded-2xl ${
-          !item.isRead
-            ? "bg-amber-50/90 border-amber-300 shadow-2xs"
-            : isDeclined
-            ? "bg-rose-50/50 border-rose-200"
-            : "bg-amber-50/50 border-amber-200/70"
-        } border text-left mb-2.5 transition-all cursor-pointer hover:border-amber-400" data-id="${item.id}">
-          <div class="flex items-center justify-between gap-1 mb-1">
-            <span class="inline-flex items-center gap-1 text-[10px] font-bold text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded-md">
-              🚨 Perintah Lembur Atasan
+        <div class="notif-card p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:border-slate-300 text-left mb-2.5 transition-all cursor-pointer group" data-id="${item.id}">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[#b91c1c] bg-[#fee2e2] border border-[#fca5a5] px-2.5 py-0.5 rounded-full">
+              <span class="w-1.5 h-1.5 rounded-full bg-[#b91c1c]"></span>
+              <span>Instruksi Lembur</span>
             </span>
-            <div class="flex items-center gap-1.5">
-              <span class="text-[10px] text-slate-400 font-medium">${item.timestamp}</span>
-              ${unreadDot}
-            </div>
           </div>
-          <h5 class="text-xs font-bold text-slate-800 leading-snug">${item.title.replace(/^[^\w\s]+/, "").trim()}</h5>
-          <p class="text-[11.5px] text-slate-600 mt-0.5 leading-relaxed">${item.message}</p>
+
+          <h5 class="text-[14px] font-bold italic text-slate-800 leading-tight">${item.meta?.instructionTask || item.title.replace(/^🚨\s*/, "")}</h5>
+          <p class="text-xs text-slate-500 italic mt-0.5 leading-tight">${item.meta?.instructionHours || "Jam Mulai dan Selesai"}</p>
           
-          <div class="mt-2 p-2 rounded-xl bg-white/90 border border-amber-200/60 text-[11px] space-y-1">
-            <div class="flex justify-between items-center text-slate-600">
-              <span class="font-semibold text-slate-800">Dari: ${item.meta?.instructionFrom || "Atasan"}</span>
-              <span class="font-bold text-amber-800">${item.meta?.instructionHours || ""}</span>
-            </div>
-            <p class="text-slate-600 leading-snug"><span class="font-medium text-slate-500">Tugas:</span> ${item.meta?.instructionTask || ""}</p>
+          <div class="flex items-center justify-between pt-1.5 text-xs">
+            <span class="text-slate-400 font-medium text-[11px]">${item.timestamp || "Kemarin"}</span>
+            <button type="button" class="btn-lihat-selengkapnya text-[#156bb8] font-bold text-xs hover:underline flex items-center cursor-pointer border-0 bg-transparent p-0" data-id="${item.id}">Lihat Selengkapnya &gt;&gt;</button>
           </div>
-
-          ${
-            isAccepted
-              ? `<div class="mt-2.5 flex items-center justify-between">
-                  <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-lg border border-emerald-200">
-                    ✓ Siap Lembur (Disetujui)
-                  </span>
-                  <span class="text-[10px] font-semibold text-emerald-600">Terkonfirmasi</span>
-                </div>`
-              : isDeclined
-              ? `<div class="mt-2.5 p-2 rounded-xl bg-rose-50 border border-rose-200/80 text-[11px] text-rose-800">
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="inline-flex items-center gap-1 text-[10px] font-bold text-rose-800 bg-rose-100 px-2 py-0.5 rounded-md">
-                      ✕ Lembur Ditolak
-                    </span>
-                    <span class="text-[10px] font-medium text-rose-500">Telah Dibatalkan</span>
-                  </div>
-                  <p class="text-rose-700 leading-snug"><span class="font-semibold text-rose-900">Alasan:</span> ${item.meta?.declineReason || "Ada kendala yang tidak dapat ditinggalkan"}</p>
-                </div>`
-              : `<div class="mt-2.5 flex items-center gap-2">
-                  <button class="btn-accept-lembur flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] py-1.5 px-3 rounded-xl cursor-pointer transition-all active:scale-95 shadow-xs flex items-center justify-center gap-1" data-id="${item.id}">
-                    ✓ Setuju (Siap Lembur)
-                  </button>
-                  <button class="btn-decline-lembur flex-1 bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border border-rose-200 font-bold text-[11px] py-1.5 px-3 rounded-xl cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1" data-id="${item.id}">
-                    ✕ Tidak Setuju
-                  </button>
-                </div>`
-          }
         </div>
       `;
     }
 
-    if (isApproved) {
+    if (isApproved && item.type.includes("lembur")) {
       return `
-        <div class="notif-card p-3 rounded-2xl ${
-          !item.isRead
-            ? "bg-emerald-50/80 border-emerald-200 shadow-2xs"
-            : "bg-emerald-50/50 border-emerald-100"
-        } border text-left mb-2 transition-all cursor-pointer hover:border-emerald-300" data-id="${item.id}">
-          <div class="flex items-center justify-between gap-1 mb-1">
-            <span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
-              ✓ Disetujui
+        <div class="notif-card p-3.5 rounded-2xl bg-[#ebf4fc] border border-[#cbe2f7] shadow-2xs text-left mb-2.5 transition-all cursor-pointer" data-id="${item.id}">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 px-2.5 py-0.5 rounded-full shadow-2xs">
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-700"></span>
+              <span>Lembur</span>
             </span>
-            <div class="flex items-center gap-1.5">
-              <span class="text-[10px] text-slate-400 font-medium">${item.timestamp}</span>
-              ${unreadDot}
-            </div>
+            <span class="inline-flex items-center gap-1 text-xs font-bold text-[#156bb8]">
+              <span class="w-1.5 h-1.5 rounded-full bg-[#156bb8]"></span>
+              <span>Disetujui</span>
+            </span>
           </div>
-          <h5 class="text-xs font-bold text-slate-800 leading-snug">${item.title.replace(/^[^\w\s]+/, "").trim()}</h5>
-          <p class="text-[11.5px] text-slate-600 mt-0.5 leading-relaxed">${item.message}</p>
-          ${
-            item.meta?.approverName
-              ? `<p class="text-[10.5px] text-emerald-700 mt-1.5 font-medium">✓ Disetujui oleh: ${item.meta.approverName}</p>`
-              : ""
-          }
+
+          <h5 class="text-[14px] font-bold italic text-slate-800 leading-tight">${item.title.replace(/^[^\w\s]+/, "").trim()}</h5>
+          <p class="text-xs text-slate-500 italic mt-0.5 leading-tight">${item.meta?.instructionHours || item.message.split("•")[0] || "Jam Mulai dan Selesai"}</p>
+          <p class="text-[#156bb8] text-xs font-semibold pt-1">${item.timestamp || "1 Menit yang lalu"}</p>
         </div>
       `;
     }
 
-    if (isRejected) {
-      return `
-        <div class="notif-card p-3 rounded-2xl ${
-          !item.isRead
-            ? "bg-rose-50/80 border-rose-200 shadow-2xs"
-            : "bg-rose-50/50 border-rose-100"
-        } border text-left mb-2 transition-all cursor-pointer hover:border-rose-300" data-id="${item.id}">
-          <div class="flex items-center justify-between gap-1 mb-1">
-            <span class="inline-flex items-center gap-1 text-[10px] font-bold text-rose-800 bg-rose-100 px-2 py-0.5 rounded-md">
-              ✕ Ditolak
-            </span>
-            <div class="flex items-center gap-1.5">
-              <span class="text-[10px] text-slate-400 font-medium">${item.timestamp}</span>
-              ${unreadDot}
-            </div>
-          </div>
-          <h5 class="text-xs font-bold text-slate-800 leading-snug">${item.title.replace(/^[^\w\s]+/, "").trim()}</h5>
-          <p class="text-[11.5px] text-slate-600 mt-0.5 leading-relaxed">${item.message}</p>
-          ${
-            item.meta?.rejectedReason
-              ? `<div class="mt-1.5 p-2 rounded-xl bg-white/90 border border-rose-200/60 text-[11px] text-rose-800 leading-snug">
-                  <span class="font-semibold text-rose-900">Alasan:</span> ${item.meta.rejectedReason}
-                 </div>`
-              : ""
-          }
-        </div>
-      `;
-    }
-
-    // Pending / submitted
     return `
-      <div class="notif-card p-3 rounded-2xl ${
-        !item.isRead
-          ? "bg-slate-100/90 border-slate-200 shadow-2xs"
-          : "bg-slate-50 border-slate-100"
-      } border text-left mb-2 transition-all cursor-pointer hover:border-slate-300" data-id="${item.id}">
-        <div class="flex items-center justify-between gap-1 mb-1">
-          <span class="inline-flex items-center gap-1 text-[10px] font-bold text-sky-800 bg-sky-100 px-2 py-0.5 rounded-md">
-            ⏳ Menunggu
+      <div class="notif-card p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs text-left mb-2.5 transition-all cursor-pointer" data-id="${item.id}">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 px-2.5 py-0.5 rounded-full shadow-2xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-slate-700"></span>
+            <span>${item.type.includes("lembur") ? "Lembur" : "Pengajuan"}</span>
           </span>
-          <div class="flex items-center gap-1.5">
-            <span class="text-[10px] text-slate-400 font-medium">${item.timestamp}</span>
-            ${unreadDot}
-          </div>
+          <span class="inline-flex items-center gap-1 text-xs font-bold ${
+            isApproved ? "text-[#156bb8]" : isRejected ? "text-[#156bb8]" : "text-orange-500"
+          }">
+            <span class="w-1.5 h-1.5 rounded-full ${
+              isApproved ? "bg-[#156bb8]" : isRejected ? "bg-[#156bb8]" : "bg-orange-500"
+            }"></span>
+            <span>${isApproved ? "Disetujui" : isRejected ? "Ditolak" : "Pending"}</span>
+          </span>
         </div>
-        <h5 class="text-xs font-bold text-slate-800 leading-snug">${item.title.replace(/^[^\w\s]+/, "").trim()}</h5>
-        <p class="text-[11.5px] text-slate-600 mt-0.5 leading-relaxed">${item.message}</p>
+
+        <h5 class="text-[14px] font-bold italic text-slate-800 leading-tight">${item.meta?.category || item.title.replace(/^[^\w\s]+/, "").trim()}</h5>
+        <p class="text-xs text-slate-500 italic mt-0.5 leading-tight">${item.message}</p>
+        <p class="text-[#156bb8] text-xs font-semibold pt-1">${item.timestamp || "10 Menit yang lalu"}</p>
       </div>
     `;
   };
@@ -876,14 +560,19 @@ export async function showNotificationPopup() {
                   markAsRead(id);
                   item.isRead = true;
                 }
-                if (item.type === "lembur_instruction" && item.meta?.instructionStatus === "accepted") {
+                if (item.type === "lembur_instruction" || item.type.includes("lembur")) {
                   Swal.close();
-                  window.location.href = "/lembur";
+                  window.location.href = item.meta?.targetUrl || "/lembur";
                   return;
                 }
-                if (item.type === "lembur_approved") {
+                if (item.type.includes("pengajuan")) {
                   Swal.close();
-                  window.location.href = "/lembur";
+                  window.location.href = item.meta?.targetUrl || "/pengajuan";
+                  return;
+                }
+                if (item.meta?.targetUrl) {
+                  Swal.close();
+                  window.location.href = item.meta.targetUrl;
                   return;
                 }
               }
@@ -893,6 +582,21 @@ export async function showNotificationPopup() {
                 attachListeners();
               }
             }
+          });
+        });
+
+        // Dedicated click handler for Lihat Selengkapnya button
+        const lihatBtns = document.querySelectorAll(".btn-lihat-selengkapnya");
+        lihatBtns.forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const target = e.currentTarget as HTMLElement;
+            const id = target.getAttribute("data-id");
+            if (id) {
+              markAsRead(id);
+            }
+            Swal.close();
+            window.location.href = "/lembur";
           });
         });
 

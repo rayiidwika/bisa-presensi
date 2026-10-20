@@ -184,6 +184,34 @@ export default function AbsensiDetailPage() {
        "")
     : (rec.checkOutNotes || "");
 
+  // Perhitungan Jarak Presensi ke Kantor (meter)
+  const calcDistanceMeters = (lat: number, lon: number): number => {
+    const R = 6371e3;
+    const φ1 = (lat * Math.PI) / 180;
+    const φ2 = (TASIK_LAT * Math.PI) / 180;
+    const Δφ = ((TASIK_LAT - lat) * Math.PI) / 180;
+    const Δλ = ((TASIK_LNG - lon) * Math.PI) / 180;
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c);
+  };
+
+  const storedInDist = typeof window !== "undefined" ? localStorage.getItem("bisa_attendance_checkin_distance") : null;
+  const storedOutDist = typeof window !== "undefined" ? localStorage.getItem("bisa_attendance_checkout_distance") : null;
+
+  const inDistance = storedInDist
+    ? parseInt(storedInDist, 10)
+    : ((savedData as any)?.checkInDistance ?? (calcDistanceMeters(inCoords.lat, inCoords.lng) || 15));
+
+  const outDistance = storedOutDist
+    ? parseInt(storedOutDist, 10)
+    : ((savedData as any)?.checkOutDistance ?? (calcDistanceMeters(outCoords.lat, outCoords.lng) || 15));
+
+  const activeDistance = activeTab === "in" ? inDistance : outDistance;
+  const isWithinRadius = activeDistance <= 100;
+
   const sc = attStatusColors(rec.status);
 
   // Perhitungan Total Jam Kerja:
@@ -240,12 +268,68 @@ export default function AbsensiDetailPage() {
 
   const totalWorkHours = calculateTotalWorkHours(checkInTime, checkOutTime);
 
+  // Helper info hari & tanggal untuk header card
+  const getHeaderDateInfo = () => {
+    let d = new Date();
+    if (!isTodayRecord && rec.date) {
+      const parsed = new Date(rec.date);
+      if (!isNaN(parsed.getTime())) {
+        d = parsed;
+      }
+    }
+    const daysIndo = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+    const monthsShort = [
+      "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+      "Jul", "Agu", "Sep", "Okt", "Nov", "Des"
+    ];
+    return {
+      dayName: daysIndo[d.getDay()],
+      dateStr: `${d.getDate()} ${monthsShort[d.getMonth()]} ${d.getFullYear()}`,
+    };
+  };
+
+  const { dayName: displayDayName, dateStr: displayDateStr } = getHeaderDateInfo();
+
+  // Durasi Total Kerja: X Jam Y Menit
+  const getWorkDurationParts = () => {
+    if (!checkInTime || checkInTime === "-- : --" || checkInTime === "--:--") {
+      return { hours: "0", mins: "0" };
+    }
+    const timeFormatted = calculateTotalWorkHours(checkInTime, checkOutTime);
+    if (!timeFormatted || timeFormatted === "00.00") return { hours: "0", mins: "0" };
+    const parts = timeFormatted.split(".");
+    return {
+      hours: String(parseInt(parts[0], 10) || 0),
+      mins: String(parseInt(parts[1], 10) || 0),
+    };
+  };
+  const { hours: workHours, mins: workMins } = getWorkDurationParts();
+
+  // Durasi Istirahat: X Jam Y Menit
+  const getBreakDurationParts = () => {
+    if (!breakStart || !breakEnd) return { hours: "0", mins: "0" };
+    const parseM = (str: string) => {
+      const match = str.match(/(\d{1,2})[:.](\d{2})/);
+      if (!match) return null;
+      return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+    };
+    const s = parseM(breakStart);
+    const e = parseM(breakEnd);
+    if (s === null || e === null || e <= s) return { hours: "0", mins: "0" };
+    const diff = e - s;
+    return {
+      hours: String(Math.floor(diff / 60)),
+      mins: String(diff % 60),
+    };
+  };
+  const { hours: breakHours, mins: breakMins } = getBreakDurationParts();
+
   return (
     <div className="min-h-screen bg-[#ddeef8] pb-24">
       {/* ══════════════ BLUE GRADIENT HEADER WITH WATERMARK ══════════════ */}
       <div className="bg-gradient-to-b from-[#2a8ee4] via-[#1f7cd0] to-[#156bb8] relative overflow-hidden">
-        {/* Watermark Logo Bisa Media Putih Blur di ujung kanan */}
-        <div className="absolute -right-6 -top-4 w-60 h-60 pointer-events-none opacity-25 filter blur-[0.8px] rotate-[-6deg] select-none">
+        {/* Watermark Logo Bisa Media Putih Blur di ujung kanan (opacity dikurangi) */}
+        <div className="absolute -right-6 -top-4 w-52 h-52 pointer-events-none opacity-12 filter blur-[0.8px] rotate-[-6deg] select-none">
           <img
             src="/bisa-media-white.png"
             alt="Watermark BISA MEDIA"
@@ -253,63 +337,69 @@ export default function AbsensiDetailPage() {
           />
         </div>
 
-        <div className="relative px-4 pt-5 pb-6">
-          {/* Top bar (Tombol Kembali & Detail Check In & Out) */}
-          <div className="relative z-10 mb-4">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => router.back()}
-                aria-label="Kembali"
-                className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 active:scale-95 flex items-center justify-center text-white transition-all backdrop-blur-xs cursor-pointer shrink-0"
-              >
-                <ChevronLeft size={22} />
-              </button>
-              <h1 className="text-white font-extrabold text-[17.5px] sm:text-[18.5px] tracking-wide leading-tight truncate">
-                Detail Check In & Out
-              </h1>
-            </div>
+        <div className="relative px-4 pt-7 sm:pt-9 pb-6 sm:pb-8">
+          {/* Top bar (Tombol Kembali & Detail Check In & Out Centered) */}
+          <div className="relative z-10 flex items-center justify-center mb-5 sm:mb-6 min-h-[36px]">
+            <button
+              onClick={() => router.back()}
+              aria-label="Kembali"
+              className="absolute left-0 w-8.5 h-8.5 rounded-full bg-white/20 hover:bg-white/30 active:scale-95 flex items-center justify-center text-white transition-all backdrop-blur-xs cursor-pointer shrink-0 z-20"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <h1 className="text-white font-bold italic text-[20px] sm:text-[23px] tracking-wide leading-tight text-center drop-shadow-xs">
+              Detail Check In & Out
+            </h1>
           </div>
 
-          {/* Employee Info Card Header */}
-          <div className="flex items-center gap-3.5 mt-3 relative z-10">
-            <div className="w-14 h-14 rounded-2xl bg-[#d8e5ee] border-2 border-white overflow-hidden shadow-sm shrink-0 flex items-center justify-center">
-              <svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
-                <circle cx="32" cy="24" r="11" fill="#475569" />
-                <path
-                  d="M14 56C14 45 22 41 32 41C42 41 50 45 50 56"
-                  fill="#475569"
-                />
+          {/* Attendance Info Card - Lebih Nyaman & Berjarak Proporsional */}
+          <div className="w-full max-w-[350px] sm:max-w-[365px] mx-auto bg-white/80 backdrop-blur-md rounded-2xl py-2.5 px-4 sm:py-3 sm:px-4.5 shadow-sm border border-white/60 relative z-10 flex items-center gap-3.5 sm:gap-4">
+            {/* Clock Icon Outline with 4 Ticks */}
+            <div className="w-8.5 h-8.5 sm:w-9.5 sm:h-9.5 flex items-center justify-center shrink-0 opacity-80">
+              <svg viewBox="0 0 54 54" className="w-full h-full text-slate-700" fill="none" stroke="currentColor">
+                <circle cx="27" cy="27" r="19" strokeWidth="4" />
+                <line x1="27" y1="3" x2="27" y2="8" strokeWidth="4" strokeLinecap="round" />
+                <line x1="27" y1="46" x2="27" y2="51" strokeWidth="4" strokeLinecap="round" />
+                <line x1="3" y1="27" x2="8" y2="27" strokeWidth="4" strokeLinecap="round" />
+                <line x1="46" y1="27" x2="51" y2="27" strokeWidth="4" strokeLinecap="round" />
+                <polyline points="27 16 27 27 32 32" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="27" cy="27" r="2" fill="currentColor" />
               </svg>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-white font-black text-[18px] leading-tight truncate tracking-tight">
-                {currentEmployee.name}
-              </p>
-              <p className="text-blue-100 text-[12.5px] font-medium mt-0.5 truncate">
-                Divisi : {currentEmployee.division}
-              </p>
-              {/* Total Jam Kerja & Istirahat */}
-              <div className="mt-1.5 flex flex-col items-start gap-1">
-                <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-white/25 shadow-2xs">
-                  <Clock size={12} className="text-emerald-300" strokeWidth={2.5} />
-                  <span className="text-[11px] text-white/95 font-medium whitespace-nowrap">
-                    Total Jam Kerja: <strong className="font-bold text-white">{totalWorkHours}</strong>
-                  </span>
-                </div>
 
-                <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-white/25 shadow-2xs">
-                  <Coffee size={12} className="text-amber-300" strokeWidth={2.5} />
-                  <span className="text-[11px] text-white/95 font-medium whitespace-nowrap">
-                    Istirahat: <strong className="font-bold text-white">{breakTimeDisplay}</strong>
-                  </span>
-                </div>
+            {/* Content: Left Info & Right Info dengan Spasi Nyaman */}
+            <div className="flex-1 flex items-center justify-between gap-3 sm:gap-4 min-w-0">
+              {/* Sisi Kiri: Shift, Jam Kerja, Total Kerja */}
+              <div className="min-w-0 pr-1">
+                <p className="text-[11.5px] sm:text-[12px] text-slate-600 font-medium italic leading-snug truncate">
+                  {rec.shift || "Reguler"}
+                </p>
+                <p className="font-time font-black text-slate-900 text-[13.5px] sm:text-[14.5px] leading-tight my-0.5 tracking-tight truncate">
+                  {currentEmployee.shift.startTime.replace(":", ".")} - {currentEmployee.shift.endTime.replace(":", ".")}
+                </p>
+                <p className="text-[9.5px] sm:text-[10px] text-[#156bb8] font-bold italic leading-snug whitespace-nowrap">
+                  Total Kerja : <span className="font-time font-bold">{workHours}</span> Jam <span className="font-time font-bold">{workMins}</span> Menit
+                </p>
+              </div>
+
+              {/* Sisi Kanan: Hari, Tanggal, Istirahat */}
+              <div className="text-right shrink-0 pl-1">
+                <p className="text-[11.5px] sm:text-[12px] text-slate-600 font-medium italic leading-snug">
+                  {displayDayName}
+                </p>
+                <p className="text-slate-700 font-semibold text-[12px] sm:text-[13px] leading-tight my-0.5 whitespace-nowrap">
+                  <span className="font-time font-bold">{displayDateStr.split(" ")[0]}</span> {displayDateStr.split(" ").slice(1).join(" ")}
+                </p>
+                <p className="text-[9.5px] sm:text-[10px] text-[#156bb8] font-bold italic leading-snug whitespace-nowrap">
+                  Istirahat : <span className="font-time font-bold">{breakHours}</span> Jam <span className="font-time font-bold">{breakMins}</span> Menit
+                </p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Curved bottom edge (Ditimpa dengan yang putih/terang seperti sebelumnya) */}
-        <div className="h-5 bg-[#ddeef8] rounded-t-3xl" />
+        {/* Curved bottom edge */}
+        <div className="h-4.5 bg-[#ddeef8] rounded-t-3xl" />
       </div>
 
       <div className="px-4 -mt-1 space-y-3 animate-fade-in">
@@ -331,7 +421,7 @@ export default function AbsensiDetailPage() {
             <div className="text-left">
               <p className="leading-tight">Clock In</p>
               <p className={`text-[10px] ${activeTab === "in" ? "text-blue-100" : "text-slate-400"} font-normal`}>
-                {checkInTime} WIB
+                <span className="font-time font-bold">{checkInTime}</span> WIB
               </p>
             </div>
           </button>
@@ -352,7 +442,7 @@ export default function AbsensiDetailPage() {
             <div className="text-left">
               <p className="leading-tight">Clock Out</p>
               <p className={`text-[10px] ${activeTab === "out" ? "text-blue-100" : "text-slate-400"} font-normal`}>
-                {checkOutTime} WIB
+                <span className="font-time font-bold">{checkOutTime}</span> WIB
               </p>
             </div>
           </button>
@@ -464,7 +554,7 @@ export default function AbsensiDetailPage() {
                 Waktu Jepret {activeTab === "in" ? "Clock In" : "Clock Out"}
               </p>
               <p className="text-[9.5px] font-bold text-white truncate leading-tight mt-0.5">
-                Pukul {activeTime} WIB
+                Pukul <span className="font-time font-bold">{activeTime}</span> WIB
               </p>
             </div>
           </div>
@@ -489,19 +579,25 @@ export default function AbsensiDetailPage() {
                   {
                     icon: <Clock size={14} />,
                     label: "Shift",
-                    value: `${rec.shift} (${currentEmployee.shift.startTime} – ${currentEmployee.shift.endTime})`,
-                    color: "text-[#3b9edd]",
-                  },
-                  {
-                    icon: <Calendar size={14} />,
-                    label: "Tanggal",
-                    value: isTodayRecord ? (savedData?.dateStr || todayDateDetail) : rec.dayLabel,
+                    value: (
+                      <span>
+                        {rec.shift} (
+                        <span className="font-time font-bold">
+                          {currentEmployee.shift.startTime} – {currentEmployee.shift.endTime}
+                        </span>
+                        )
+                      </span>
+                    ),
                     color: "text-[#3b9edd]",
                   },
                   {
                     icon: <LogIn size={14} />,
                     label: "Jam Masuk",
-                    value: `${checkInTime} WIB`,
+                    value: (
+                      <span>
+                        <span className="font-time font-bold">{checkInTime}</span> WIB
+                      </span>
+                    ),
                     color: "text-emerald-500",
                   },
                   {
@@ -517,6 +613,27 @@ export default function AbsensiDetailPage() {
                     color: "text-emerald-500",
                   },
                   {
+                    icon: <Navigation size={14} />,
+                    label: "Jarak Clock In",
+                    value: (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-[#1a3c5e]">
+                          <span className="font-time font-bold">{activeDistance}</span> meter
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                            isWithinRadius
+                              ? "text-emerald-700 bg-emerald-50 border border-emerald-200"
+                              : "text-amber-700 bg-amber-50 border border-amber-200"
+                          }`}
+                        >
+                          {isWithinRadius ? "Radius 100m ✓" : "Luar Radius"}
+                        </span>
+                      </div>
+                    ),
+                    color: "text-emerald-500",
+                  },
+                  {
                     icon: <ShieldCheck size={14} />,
                     label: "Status Dokumentasi",
                     value: "Foto Wajah & Lokasi GPS Terverifikasi ✓",
@@ -527,19 +644,25 @@ export default function AbsensiDetailPage() {
                   {
                     icon: <Clock size={14} />,
                     label: "Shift",
-                    value: `${rec.shift} (${currentEmployee.shift.startTime} – ${currentEmployee.shift.endTime})`,
-                    color: "text-[#3b9edd]",
-                  },
-                  {
-                    icon: <Calendar size={14} />,
-                    label: "Tanggal",
-                    value: isTodayRecord ? (savedData?.dateStr || todayDateDetail) : rec.dayLabel,
+                    value: (
+                      <span>
+                        {rec.shift} (
+                        <span className="font-time font-bold">
+                          {currentEmployee.shift.startTime} – {currentEmployee.shift.endTime}
+                        </span>
+                        )
+                      </span>
+                    ),
                     color: "text-[#3b9edd]",
                   },
                   {
                     icon: <LogOut size={14} />,
                     label: "Jam Keluar",
-                    value: `${checkOutTime} WIB`,
+                    value: (
+                      <span>
+                        <span className="font-time font-bold">{checkOutTime}</span> WIB
+                      </span>
+                    ),
                     color: "text-rose-500",
                   },
                   {
@@ -552,6 +675,27 @@ export default function AbsensiDetailPage() {
                     icon: <MessageSquare size={14} />,
                     label: "Catatan Clock Out",
                     value: checkOutNotes ? `"${checkOutNotes}"` : "-",
+                    color: "text-rose-500",
+                  },
+                  {
+                    icon: <Navigation size={14} />,
+                    label: "Jarak Clock Out",
+                    value: (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-[#1a3c5e]">
+                          <span className="font-time font-bold">{activeDistance}</span> meter
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                            isWithinRadius
+                              ? "text-emerald-700 bg-emerald-50 border border-emerald-200"
+                              : "text-amber-700 bg-amber-50 border border-amber-200"
+                          }`}
+                        >
+                          {isWithinRadius ? "Radius 100m ✓" : "Luar Radius"}
+                        </span>
+                      </div>
+                    ),
                     color: "text-rose-500",
                   },
                   {

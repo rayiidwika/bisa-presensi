@@ -57,6 +57,66 @@ export function saveUserProfile(profile: Partial<UserProfile>): UserProfile {
   }
 }
 
+/**
+ * Otomatis kompres file gambar foto profil menjadi base64 yang ringan dan tajam (max 600x600, quality 0.82 JPEG)
+ * sehingga semua ukuran dan format foto dapat diupload tanpa kendala kapasitas localStorage.
+ */
+export function compressImageFile(
+  file: File,
+  maxWidth = 600,
+  maxHeight = 600,
+  quality = 0.82
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = (err) => reject(err);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => {
+        resolve(e.target?.result as string);
+      };
+      img.onload = () => {
+        try {
+          let width = img.width;
+          let height = img.height;
+
+          // Proporsional resize
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+          resolve(compressedBase64);
+        } catch {
+          resolve(e.target?.result as string);
+        }
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 /** Ambil kata sandi tersimpan (default: "123456") */
 export function getUserPassword(): string {
   if (typeof window === "undefined") return "123456";
@@ -297,18 +357,22 @@ export async function openEditProfileModal(onLogout: () => void) {
       const previewContainer = document.getElementById("avatar-preview-container");
 
       if (fileInput && previewContainer) {
-        fileInput.addEventListener("change", (e) => {
+        fileInput.addEventListener("change", async (e) => {
           const file = (e.target as HTMLInputElement).files?.[0];
           if (file) {
-            const reader = new FileReader();
-            reader.onload = (loadEvt) => {
-              const res = loadEvt.target?.result as string;
-              if (res) {
-                tempAvatarUrl = res;
-                previewContainer.innerHTML = renderAvatarPreview(tempAvatarUrl);
-              }
-            };
-            reader.readAsDataURL(file);
+            try {
+              previewContainer.innerHTML = `
+                <div class="w-16 h-16 rounded-full bg-blue-50 border-2 border-[#156bb8] flex items-center justify-center shadow-md">
+                  <div class="w-5 h-5 border-2 border-[#156bb8] border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              `;
+              const res = await compressImageFile(file, 600, 600, 0.82);
+              tempAvatarUrl = res;
+              previewContainer.innerHTML = renderAvatarPreview(tempAvatarUrl);
+            } catch (err) {
+              console.error(err);
+              previewContainer.innerHTML = renderAvatarPreview(tempAvatarUrl);
+            }
           }
         });
       }

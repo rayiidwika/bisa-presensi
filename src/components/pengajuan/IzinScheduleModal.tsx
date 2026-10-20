@@ -498,11 +498,11 @@ export default function IzinScheduleModal({
                       <div className="text-sm font-extrabold text-[#1a3c5e] flex items-baseline gap-1">
                         {startTime ? (
                           <>
-                            <span>{startTime}</span>
+                            <span className="font-time">{startTime}</span>
                             <span className="text-[11px] font-semibold text-slate-400">WIB</span>
                           </>
                         ) : (
-                          <span className="text-slate-300 font-mono text-sm">-- : --</span>
+                          <span className="font-time text-slate-300 text-sm">-- : --</span>
                         )}
                       </div>
                     </div>
@@ -527,11 +527,11 @@ export default function IzinScheduleModal({
                       <div className="text-sm font-extrabold text-[#1a3c5e] flex items-baseline gap-1">
                         {endTime ? (
                           <>
-                            <span>{endTime}</span>
+                            <span className="font-time">{endTime}</span>
                             <span className="text-[11px] font-semibold text-slate-400">WIB</span>
                           </>
                         ) : (
-                          <span className="text-slate-300 font-mono text-sm">-- : --</span>
+                          <span className="font-time text-slate-300 text-sm">-- : --</span>
                         )}
                       </div>
                     </div>

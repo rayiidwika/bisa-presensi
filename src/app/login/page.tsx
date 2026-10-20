@@ -219,7 +219,7 @@ export default function LoginPage() {
 
           // Format verification time
           const now = new Date();
-          const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")} WIB`;
+          const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")} WIB`;
           setVerificationTime(timeStr);
 
           stopCamera();
@@ -297,7 +297,7 @@ export default function LoginPage() {
 
     setTimeout(() => {
       const now = new Date();
-      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")} WIB`;
+      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")} WIB`;
       setVerificationTime(timeStr);
       setScanStep("success");
       setScanProgress(100);

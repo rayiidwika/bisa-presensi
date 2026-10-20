@@ -41,13 +41,13 @@ export default function PengajuanPage() {
             className="w-full h-full object-contain"
           />
         </div>
-        <div className="relative px-4 pt-5 pb-4 flex items-center justify-between">
+        <div className="relative px-4 sm:px-6 md:px-8 pt-5 pb-4 flex items-center justify-between">
           <h1 className="text-white font-bold text-xl">Pengajuan</h1>
         </div>
         <div className="h-4 bg-[#ddeef8] rounded-t-3xl" />
       </div>
 
-      <div className="px-4 -mt-1 pb-6 space-y-3 animate-fade-in">
+      <div className="px-4 sm:px-6 md:px-8 -mt-1 pb-6 space-y-3 animate-fade-in">
         {/* ── Pemilihan Bulan & Tahun (Scrollable) ── */}
         <MonthYearPicker
           month={month}
