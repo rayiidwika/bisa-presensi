@@ -10,7 +10,7 @@ interface FaceRegistrationModalProps {
   onSuccess: (photoDataUrl: string) => void;
 }
 
-type RegistrationStep = "ready" | "scanning" | "success";
+type RegistrationStep = "scanning" | "success";
 
 const TOTAL_TICKS = 48; // 48 Garis Radial Apple Face ID (0 s.d 47)
 const RADIUS = 142;
@@ -22,9 +22,9 @@ export default function FaceRegistrationModal({
   onClose,
   onSuccess,
 }: FaceRegistrationModalProps) {
-  const [step, setStep] = useState<RegistrationStep>("ready");
+  const [step, setStep] = useState<RegistrationStep>("scanning");
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [instruction, setInstruction] = useState("Posisikan wajah Anda di dalam bingkai");
+  const [instruction, setInstruction] = useState("Posisikan wajah Anda tepat di dalam lingkaran");
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
 
   // Status setiap 48 garis radial tick: false = abu-abu (belum terpindai), true = hijau (sudah terpindai)
@@ -60,16 +60,19 @@ export default function FaceRegistrationModal({
     setTicksFilled(freshTicks);
     hasCenteredFaceRef.current = false;
     prevFrameDataRef.current = null;
-    setStep("ready");
-    setInstruction("Posisikan wajah Anda di dalam bingkai");
+    setStep("scanning");
+    setInstruction("Posisikan wajah Anda tepat di dalam lingkaran");
     setCameraError(null);
     setCapturedPhoto(null);
   };
 
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      handleStartSetup();
+    } else {
       resetAll();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   useEffect(() => {
@@ -167,7 +170,6 @@ export default function FaceRegistrationModal({
           ? "Izin akses kamera ditolak. Silakan izinkan browser mengakses kamera depan."
           : "Kamera tidak terdeteksi atau sedang digunakan oleh aplikasi lain."
       );
-      setStep("ready");
     }
   };
 
@@ -464,19 +466,15 @@ export default function FaceRegistrationModal({
         {/* Dynamic Titles */}
         <div className="mb-6 sm:mb-8 transition-all duration-300">
           <h1 className="text-2xl sm:text-[32px] font-bold tracking-tight text-white leading-tight">
-            {step === "ready"
-              ? "Cara Mengatur Face ID"
-              : step === "scanning"
-              ? "Gerakkan Kepala Anda"
-              : "Face ID Telah Diatur"}
+            {step === "success"
+              ? "Face ID Telah Diatur"
+              : "Gerakkan Kepala Anda"}
           </h1>
 
           <p className="text-white/70 text-sm sm:text-[15px] mt-2 max-w-xs mx-auto leading-relaxed h-11 flex items-center justify-center">
-            {step === "ready"
-              ? "Posisikan wajah Anda di dalam lingkaran, lalu gerakkan kepala Anda secara perlahan dalam lingkaran untuk memindai seluruh area wajah."
-              : step === "scanning"
-              ? instruction
-              : "Wajah Anda kini terdaftar dan siap digunakan untuk login dan absensi."}
+            {step === "success"
+              ? "Wajah Anda kini terdaftar dan siap digunakan untuk login dan absensi."
+              : instruction}
           </p>
 
           {/* Camera Error Alert */}
@@ -515,9 +513,7 @@ export default function FaceRegistrationModal({
                   stroke={
                     isFilled
                       ? "#34c759"
-                      : step === "scanning"
-                      ? "rgba(255, 255, 255, 0.35)"
-                      : "rgba(255, 255, 255, 0.2)"
+                      : "rgba(255, 255, 255, 0.35)"
                   }
                   strokeWidth={isFilled ? 4 : 2.5}
                   strokeLinecap="round"
@@ -530,36 +526,15 @@ export default function FaceRegistrationModal({
           {/* Circular Camera Viewport (MURNI KAMERA ASLI - TANPA TOPENG / MESH) */}
           <div className="relative w-[216px] h-[216px] sm:w-[230px] sm:h-[230px] rounded-full overflow-hidden bg-[#1c1c1e] flex items-center justify-center shadow-2xl">
             {/* Live Camera Video Feed Murni */}
-            {step !== "ready" && (
-              <video
-                ref={videoRef}
-                className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${
-                  step === "success" ? "opacity-30 blur-xs" : "opacity-100"
-                }`}
-                autoPlay
-                playsInline
-                muted
-              />
-            )}
-
-            {/* Ready State: Placeholder Ilustrasi Garis Wajah Apple */}
-            {step === "ready" && (
-              <div className="flex flex-col items-center justify-center text-white/50 animate-pulse">
-                <svg
-                  viewBox="0 0 100 100"
-                  className="w-28 h-28 stroke-white/40 fill-none"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="50" cy="50" r="44" strokeDasharray="6 6" />
-                  <path d="M 36 42 Q 40 38 44 42" />
-                  <path d="M 56 42 Q 60 38 64 42" />
-                  <path d="M 50 48 L 50 58 L 54 58" />
-                  <path d="M 38 66 Q 50 76 62 66" />
-                </svg>
-              </div>
-            )}
+            <video
+              ref={videoRef}
+              className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${
+                step === "success" ? "opacity-30 blur-xs" : "opacity-100"
+              }`}
+              autoPlay
+              playsInline
+              muted
+            />
 
             {/* Success State: Apple Face ID Green Springing Checkmark */}
             {step === "success" && (
@@ -575,25 +550,21 @@ export default function FaceRegistrationModal({
 
       {/* ══════════════ 4. BOTTOM ACTION BAR ══════════════ */}
       <div className="w-full max-w-sm mx-auto z-20 pb-2">
-        {step === "ready" && (
+        {cameraError ? (
           <button
             type="button"
             onClick={handleStartSetup}
             className="w-full py-4 rounded-full bg-[#0071e3] hover:bg-[#0077ed] text-white text-[17px] font-semibold tracking-normal shadow-lg transition-all active:scale-[0.98] cursor-pointer"
           >
-            Mulai
+            Coba Lagi
           </button>
-        )}
-
-        {step === "scanning" && (
+        ) : step === "scanning" ? (
           <div className="py-3 text-center">
             <span className="text-white/60 text-sm font-medium">
               Area Terpindai: <span className="text-[#34c759] font-bold">{progressPercent}%</span>
             </span>
           </div>
-        )}
-
-        {step === "success" && (
+        ) : step === "success" ? (
           <button
             type="button"
             onClick={handleFinish}
@@ -601,7 +572,7 @@ export default function FaceRegistrationModal({
           >
             Selesai
           </button>
-        )}
+        ) : null}
       </div>
     </div>
   );
