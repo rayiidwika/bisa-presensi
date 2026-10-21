@@ -219,7 +219,8 @@ export default function LoginPage() {
       Math.abs(live.chroma[2] - reg.chroma[2]);
     const sChroma = Math.max(0, 1 - diffChroma * 1.5);
 
-    return sLbp * 0.50 + sProf * 0.35 + sChroma * 0.15;
+    // Nilai akhir diskriminatif
+    return sLbp * 0.55 + sProf * 0.35 + sChroma * 0.10;
   };
 
   // ══════════════ REAL-TIME CAMERA SCAN LIFECYCLE ══════════════
@@ -269,7 +270,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Pre-komputasi matriks biometrik LBP dari foto hasil registrasi (48x48)
+      // Pre-komputasi matriks biometrik LBP dari area wajah terdaftar (CROP KOTAK WAJAH, BUKAN RUANGAN)
       const regCanvas = document.createElement("canvas");
       regCanvas.width = 48;
       regCanvas.height = 48;
@@ -280,7 +281,14 @@ export default function LoginPage() {
         const regImg = new Image();
         regImg.crossOrigin = "anonymous";
         regImg.onload = () => {
-          regCtx.drawImage(regImg, 0, 0, 48, 48);
+          const natW = regImg.naturalWidth || 640;
+          const natH = regImg.naturalHeight || 480;
+          const cropSize = Math.min(natW, natH) * 0.52;
+          const cropX = (natW - cropSize) / 2;
+          const cropY = (natH - cropSize) / 2 + natH * 0.02;
+
+          // Crop hanya kotak wajah tengah, buang background ruangan
+          regCtx.drawImage(regImg, cropX, cropY, cropSize, cropSize, 0, 0, 48, 48);
           const raw = regCtx.getImageData(0, 0, 48, 48).data;
           const rLuma = new Float32Array(48 * 48);
           for (let i = 0; i < 48 * 48; i++) {
@@ -342,7 +350,7 @@ export default function LoginPage() {
         // REAL-TIME BIOMETRIC DETECTION & COMPARISON ENGINE
         // ══════════════════════════════════════════════════════════════════════════
         setScanStep("scanning");
-        setScanProgress(25);
+        setScanProgress(20);
         setScanStatusText("Mencari wajah di depan kamera...");
 
         const liveCanvas = document.createElement("canvas");
@@ -351,23 +359,29 @@ export default function LoginPage() {
         const liveCtx = liveCanvas.getContext("2d", { willReadFrequently: true });
 
         let consecutiveMatches = 0;
-        let matchConfidence = 28;
+        let matchConfidence = 20;
 
         const processRealtimeMatching = () => {
           if (isCancelled || !videoRef.current) return;
           const video = videoRef.current;
 
           if (video.readyState >= 2 && video.videoWidth > 0 && liveCtx) {
-            // Draw mirrored live frame onto 48x48 canvas
+            const vW = video.videoWidth;
+            const vH = video.videoHeight;
+            const cropSize = Math.min(vW, vH) * 0.52;
+            const cropX = (vW - cropSize) / 2;
+            const cropY = (vH - cropSize) / 2 + vH * 0.02;
+
+            // CROP HANYA KOTAK WAJAH TENGAH (MENGHILANGKAN LATAR BELAKANG RUANGAN)
             liveCtx.save();
             liveCtx.translate(48, 0);
             liveCtx.scale(-1, 1);
-            liveCtx.drawImage(video, 0, 0, 48, 48);
+            liveCtx.drawImage(video, cropX, cropY, cropSize, cropSize, 0, 0, 48, 48);
             liveCtx.restore();
 
             const liveImgData = liveCtx.getImageData(0, 0, 48, 48).data;
 
-            // 1. Deteksi adaptif keberadaan wajah (Skin tone & Luminance)
+            // 1. Deteksi keberadaan wajah di dalam area crop
             let facePixels = 0;
             let centerLumaSum = 0;
             let centerCount = 0;
@@ -391,7 +405,7 @@ export default function LoginPage() {
                   facePixels++;
                 }
 
-                if (x >= 12 && x <= 36 && y >= 8 && y <= 40) {
+                if (x >= 10 && x <= 38 && y >= 8 && y <= 40) {
                   centerLumaSum += lum;
                   centerCount++;
                 }
@@ -401,21 +415,21 @@ export default function LoginPage() {
             const centerAvgLuma = centerLumaSum / (centerCount || 1);
 
             let centerVarianceSum = 0;
-            for (let y = 12; y <= 36; y++) {
-              for (let x = 12; x <= 36; x++) {
+            for (let y = 10; y <= 38; y++) {
+              for (let x = 10; x <= 38; x++) {
                 const diff = liveLuma[y * 48 + x] - centerAvgLuma;
                 centerVarianceSum += diff * diff;
               }
             }
-            const centerStd = Math.sqrt(centerVarianceSum / ((25 * 25) || 1));
+            const centerStd = Math.sqrt(centerVarianceSum / ((29 * 29) || 1));
 
-            // Wajah terdeteksi jika ada piksel wajah dan kontur/variansi fitur wajah
-            const hasFaceInView = facePixels >= 40 && centerAvgLuma > 15 && centerAvgLuma < 250 && centerStd > 6;
+            // Wajah terdeteksi jika ada piksel rona wajah dan kontur variansi mata/hidung/mulut
+            const hasFaceInView = facePixels >= 45 && centerAvgLuma > 15 && centerAvgLuma < 250 && centerStd > 7;
 
             if (!hasFaceInView) {
               setIsFaceMismatch(false);
               setScanStatusText("Arahkan wajah Anda ke dalam bingkai...");
-              matchConfidence = Math.max(18, matchConfidence - 2.5);
+              matchConfidence = Math.max(15, matchConfidence - 2.0);
               const displayScore = Math.round(matchConfidence);
               setLiveMatchScore(displayScore);
               setScanProgress(displayScore);
@@ -423,37 +437,47 @@ export default function LoginPage() {
             } else if (!regDescriptor) {
               setScanStatusText("Memuat data biometrik terdaftar...");
             } else {
-              // 2. Ekstraksi Fitur Biometrik Live & Bandingkan dengan Foto Master Terdaftar
+              // 2. Ekstraksi Fitur Biometrik Wajah Live & Bandingkan dengan Foto Wajah Terdaftar
               const liveDescriptor = extractBiometricDescriptor(liveLuma, liveImgData);
               const similarity = calculateBiometricSimilarity(liveDescriptor, regDescriptor);
 
               // ══════════════════════════════════════════════════════════════════════════
-              // EVALUASI KESESUAIAN BIOMETRIK: THRESHOLD 65%
+              // EVALUASI KESESUAIAN BIOMETRIK: THRESHOLD KETAT 68%
               // ══════════════════════════════════════════════════════════════════════════
-              if (similarity < 0.65) {
+              if (similarity < 0.68) {
                 // ─── WAJAH BERBEDA / TEMAN / BUKAN PEMILIK AKUN YANG TERDAFTAR ───
                 setIsFaceMismatch(true);
                 consecutiveMatches = 0;
-                matchConfidence = Math.max(15, matchConfidence - 3.5);
-                const displayScore = Math.min(52, Math.max(15, Math.round(similarity * 100)));
+                matchConfidence = Math.max(12, matchConfidence - 2.5);
+                const displayScore = Math.min(42, Math.max(15, Math.round(similarity * 100)));
 
                 setLiveMatchScore(displayScore);
                 setScanProgress(displayScore);
                 setScanStatusText(`Wajah Tidak Cocok (${displayScore}%) — Bukan ${storedName}`);
-                // DIJAMIN TIDAK AKAN LOGIN KARENA consecutiveMatches TIDAK AKAN NAIK
+                // DIJAMIN TIDAK BISA LOGIN KARENA consecutiveMatches TIDAK NAIK
               } else {
-                // ─── WAJAH COCOK DENGAN HASIL REGISTRASI ───
+                // ─── WAJAH COCOK (PEMILIK ASLI) ───
                 setIsFaceMismatch(false);
-                matchConfidence = Math.min(100, matchConfidence + 4.8);
+
+                // Kecepatan pemindaian diatur teratur (~2.5 detik agar elegan dan realistis)
+                matchConfidence = Math.min(100, matchConfidence + 0.90);
                 const displayScore = Math.min(99, Math.round(matchConfidence));
 
                 setLiveMatchScore(displayScore);
                 setScanProgress(displayScore);
-                setScanStatusText(`Wajah Sesuai: ${storedName} (${displayScore}%)...`);
+
+                if (displayScore < 50) {
+                  setScanStatusText(`Memindai struktur biometrik: ${displayScore}%...`);
+                } else if (displayScore < 80) {
+                  setScanStatusText(`Memverifikasi kontur wajah ${storedName}: ${displayScore}%...`);
+                } else {
+                  setScanStatusText(`Mencocokkan identitas: ${displayScore}% (Sesuai)...`);
+                }
+
                 consecutiveMatches++;
 
-                // ══════════════ WAJAH COCOK & TERVERIFIKASI ══════════════
-                if (consecutiveMatches >= 4 && matchConfidence >= 80) {
+                // ══════════════ WAJAH COCOK & TERVERIFIKASI SETELAH ~2.5 DETIK ══════════════
+                if (consecutiveMatches >= 25 && matchConfidence >= 98) {
                   if (matchLoopAnimId) cancelAnimationFrame(matchLoopAnimId);
 
                   // Capture snapshot dari live video
@@ -481,22 +505,16 @@ export default function LoginPage() {
                   setScanStatusText(`Wajah Terverifikasi: ${storedName}`);
                   playFaceIdChime();
 
-                  let count = 2;
-                  setRedirectCountdown(count);
-                  const interval = setInterval(() => {
-                    count -= 1;
-                    setRedirectCountdown(count);
-                    if (count <= 0) {
-                      clearInterval(interval);
-                      setShowFaceModal(false);
-                      markUserLoggedIn();
-                      toast.success("Login Face ID Berhasil!", {
-                        description: `Selamat datang kembali, ${storedName}!`,
-                      });
-                      window.location.href = "/";
-                    }
-                  }, 1000);
-                  timers.push(interval as any);
+                  // Otomatis langsung masuk ke dashboard dalam 1.2 detik tanpa perlu tombol
+                  setTimeout(() => {
+                    setShowFaceModal(false);
+                    markUserLoggedIn();
+                    toast.success("Login Face ID Berhasil!", {
+                      description: `Selamat datang kembali, ${storedName}!`,
+                    });
+                    window.location.href = "/";
+                  }, 1200);
+
                   return;
                 }
               }
@@ -1300,19 +1318,11 @@ export default function LoginPage() {
                   NIP: {registeredNip} • Terverifikasi
                 </p>
 
-                {/* Primary Button Masuk */}
-                <button
-                  type="button"
-                  onClick={handleProceedDashboardNow}
-                  className="w-full mt-3 py-3 rounded-full bg-[#34c759] hover:bg-[#30b753] text-white font-semibold text-xs sm:text-sm tracking-wide shadow-lg shadow-[#34c759]/30 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <span>Masuk ke Beranda Sekarang</span>
-                  <ArrowRight size={15} strokeWidth={2.5} />
-                </button>
-
-                <p className="text-[10.5px] text-slate-400 font-medium pt-1">
-                  Mengarahkan otomatis dalam {redirectCountdown} detik...
-                </p>
+                {/* Otomatis masuk tanpa tombol */}
+                <div className="pt-2.5 pb-1 flex items-center justify-center gap-2 text-xs text-[#34c759] font-medium animate-pulse">
+                  <div className="w-3.5 h-3.5 border-2 border-[#34c759] border-t-transparent rounded-full animate-spin" />
+                  <span>Membuka aplikasi...</span>
+                </div>
               </div>
             )}
           </div>
