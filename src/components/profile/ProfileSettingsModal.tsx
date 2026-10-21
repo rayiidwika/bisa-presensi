@@ -16,7 +16,6 @@ import {
   RotateCcw,
   ScanFace,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import Swal from "sweetalert2";

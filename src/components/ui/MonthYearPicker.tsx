@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { ChevronDown, Calendar, X, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface MonthYearPickerProps {
@@ -36,14 +36,6 @@ export default function MonthYearPicker({
   const [isOpen, setIsOpen] = useState(false);
   const [tempMonth, setTempMonth] = useState(month);
   const [tempYear, setTempYear] = useState(year);
-
-  useEffect(() => {
-    setTempMonth(month);
-  }, [month]);
-
-  useEffect(() => {
-    setTempYear(year);
-  }, [year]);
 
   const monthIndex = parseInt(month, 10) - 1;
   const currentMonthName = MONTH_NAMES[monthIndex] || "September";

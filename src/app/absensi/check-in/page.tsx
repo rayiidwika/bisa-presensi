@@ -5,8 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   RotateCw,
   MapPin,
-  ArrowRightCircle,
-  ArrowLeftCircle,
   Building2,
   Camera,
   ChevronLeft,

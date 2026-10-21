@@ -244,7 +244,7 @@ export function getUnreadCount(): number {
 /** Tampilkan Pop-up Notifikasi menggunakan SweetAlert2 dengan filter lengkap */
 export async function showNotificationPopup() {
   const Swal = (await import("sweetalert2")).default;
-  let notifs = getNotifications();
+  const notifs = getNotifications();
 
   let activeFilter: "all" | "unread" | "instruction" | "pengajuan" | "lembur" = "all";
 
@@ -252,9 +252,6 @@ export async function showNotificationPopup() {
     const isInstruction = item.type === "lembur_instruction";
     const isApproved = item.statusBadge === "approved";
     const isRejected = item.statusBadge === "rejected";
-    const unreadDot = !item.isRead
-      ? `<span class="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0 mt-0.5"></span>`
-      : "";
 
     if (isInstruction) {
       return `

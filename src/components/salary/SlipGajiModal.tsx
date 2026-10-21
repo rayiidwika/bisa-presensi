@@ -4,14 +4,11 @@ import React, { useRef, useState, forwardRef } from "react";
 import {
   X,
   Download,
-  Image as ImageIcon,
   CheckCircle2,
   Wallet,
   Coins,
   Banknote,
   FileText,
-  Share2,
-  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 

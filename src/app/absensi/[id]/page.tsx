@@ -7,7 +7,6 @@ import { attStatusColors, attStatusLabel } from "@/lib/utils";
 import {
   MapPin,
   Clock,
-  Calendar,
   LogIn,
   LogOut,
   CheckCircle2,
@@ -17,7 +16,6 @@ import {
   ShieldCheck,
   MessageSquare,
   ChevronLeft,
-  Coffee,
 } from "lucide-react";
 
 const TASIK_LAT = -7.3274;
@@ -56,18 +54,8 @@ export default function AbsensiDetailPage() {
   } | null>(null);
 
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
-  const [todayDateDetail, setTodayDateDetail] = useState<string>("Rab, 30 September 2026");
 
   useEffect(() => {
-    const now = new Date();
-    const daysShort = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
-    const monthsFull = [
-      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-    ];
-    setTodayDateDetail(
-      `${daysShort[now.getDay()]}, ${now.getDate()} ${monthsFull[now.getMonth()]} ${now.getFullYear()}`
-    );
 
     try {
       const stored = localStorage.getItem("bisa_attendance_today");
@@ -109,8 +97,6 @@ export default function AbsensiDetailPage() {
        (typeof window !== "undefined" && localStorage.getItem("bisa_attendance_break_end")) ||
        "13:00")
     : ((rec as any).breakEnd || "13:00");
-
-  const breakTimeDisplay = `${breakStart} - ${breakEnd}`;
 
   const checkInLocation = isTodayRecord
     ? ((typeof window !== "undefined" && localStorage.getItem("bisa_attendance_checkin_location")) ||
@@ -265,8 +251,6 @@ export default function AbsensiDetailPage() {
 
     return `${formattedHours}.${formattedMins}`;
   };
-
-  const totalWorkHours = calculateTotalWorkHours(checkInTime, checkOutTime);
 
   // Helper info hari & tanggal untuk header card
   const getHeaderDateInfo = () => {

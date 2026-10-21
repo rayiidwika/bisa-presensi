@@ -147,7 +147,7 @@ export function changeUserPassword(oldPass: string, newPass: string): { success:
   try {
     localStorage.setItem(PASSWORD_STORAGE_KEY, newPass);
     return { success: true, message: "Kata sandi berhasil diperbarui!" };
-  } catch (err) {
+  } catch {
     return { success: false, message: "Gagal menyimpan kata sandi baru." };
   }
 }
