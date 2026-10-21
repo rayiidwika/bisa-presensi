@@ -54,6 +54,7 @@ export default function LoginPage() {
   const [registeredName, setRegisteredName] = useState<string>("Pegawai");
   const [registeredNip, setRegisteredNip] = useState<string>("BMG250001");
   const [liveMatchScore, setLiveMatchScore] = useState<number>(0);
+  const [isFaceMismatch, setIsFaceMismatch] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -105,10 +106,127 @@ export default function LoginPage() {
     }
   };
 
+  // ══════════════ FACE BIOMETRIC EXTRACTOR & MATCHER (LBP + 16-ZONE + CHROMA) ══════════════
+  interface BiometricDescriptor {
+    lbpVector: Float32Array; // 16 blocks x 8 bins = 128 dimensi tekstur mikro wajah
+    regProfile: Float32Array; // 16 area proporsi anatomis wajah
+    chroma: [number, number, number]; // Komposisi rona r, g, b
+  }
+
+  const extractBiometricDescriptor = (luma: Float32Array, rawRgb: Uint8ClampedArray): BiometricDescriptor => {
+    // 1. 16 Blocks (4x4 grid, masing-masing 12x12 piksel) Local Binary Patterns (LBP)
+    // Mengekstrak tekstur kontur alis, sudut mata, pangkal hidung, lekuk bibir, dan rahang
+    const lbpVector = new Float32Array(128);
+    for (let by = 0; by < 4; by++) {
+      for (let bx = 0; bx < 4; bx++) {
+        const blockIdx = by * 4 + bx;
+        const startX = bx * 12;
+        const startY = by * 12;
+        for (let y = startY + 1; y < startY + 11; y++) {
+          for (let x = startX + 1; x < startX + 11; x++) {
+            const c = luma[y * 48 + x];
+            let code = 0;
+            if (luma[(y - 1) * 48 + (x - 1)] >= c) code |= 1;
+            if (luma[(y - 1) * 48 + x] >= c) code |= 2;
+            if (luma[(y - 1) * 48 + (x + 1)] >= c) code |= 4;
+            if (luma[y * 48 + (x + 1)] >= c) code |= 8;
+            if (luma[(y + 1) * 48 + (x + 1)] >= c) code |= 16;
+            if (luma[(y + 1) * 48 + x] >= c) code |= 32;
+            if (luma[(y + 1) * 48 + (x - 1)] >= c) code |= 64;
+            if (luma[y * 48 + (x - 1)] >= c) code |= 128;
+            const bin = code >> 5; // 0..7
+            lbpVector[blockIdx * 8 + bin]++;
+          }
+        }
+      }
+    }
+    // Normalisasi LBP vector ke unit length untuk pembandingan Cosine
+    let lbpNormSq = 0;
+    for (let i = 0; i < 128; i++) lbpNormSq += lbpVector[i] * lbpVector[i];
+    const lbpNorm = Math.sqrt(lbpNormSq) || 1;
+    for (let i = 0; i < 128; i++) lbpVector[i] /= lbpNorm;
+
+    // 2. 16-Zone Regional Profile dinormalisasi terhadap rata-rata intensitas wajah
+    const regProfile = new Float32Array(16);
+    let totalLuma = 0;
+    for (let by = 0; by < 4; by++) {
+      for (let bx = 0; bx < 4; bx++) {
+        let bSum = 0;
+        for (let y = by * 12; y < (by + 1) * 12; y++) {
+          for (let x = bx * 12; x < (bx + 1) * 12; x++) {
+            bSum += luma[y * 48 + x];
+          }
+        }
+        regProfile[by * 4 + bx] = bSum / 144;
+        totalLuma += bSum;
+      }
+    }
+    const meanLuma = totalLuma / (48 * 48) || 1;
+    let profNormSq = 0;
+    for (let i = 0; i < 16; i++) {
+      regProfile[i] /= meanLuma;
+      profNormSq += regProfile[i] * regProfile[i];
+    }
+    const profNorm = Math.sqrt(profNormSq) || 1;
+    for (let i = 0; i < 16; i++) regProfile[i] /= profNorm;
+
+    // 3. Central Face Chroma (x: 12..36, y: 10..38)
+    let rSum = 0, gSum = 0, bSum = 0, count = 0;
+    for (let y = 10; y <= 38; y++) {
+      for (let x = 12; x <= 36; x++) {
+        const idx = (y * 48 + x) * 4;
+        const r = rawRgb[idx];
+        const g = rawRgb[idx + 1];
+        const b = rawRgb[idx + 2];
+        const sum = r + g + b || 1;
+        rSum += r / sum;
+        gSum += g / sum;
+        bSum += b / sum;
+        count++;
+      }
+    }
+    const chroma: [number, number, number] = [
+      rSum / (count || 1),
+      gSum / (count || 1),
+      bSum / (count || 1),
+    ];
+
+    return { lbpVector, regProfile, chroma };
+  };
+
+  const calculateBiometricSimilarity = (
+    live: BiometricDescriptor,
+    reg: BiometricDescriptor
+  ): number => {
+    // a. LBP Cosine Similarity (tekstur lekukan & fitur wajah mikro)
+    let lbpDot = 0;
+    for (let i = 0; i < 128; i++) {
+      lbpDot += live.lbpVector[i] * reg.lbpVector[i];
+    }
+    const sLbp = Math.max(0, Math.min(1, lbpDot));
+
+    // b. Regional Profile Cosine Similarity (proporsi relatif 16 area wajah)
+    let profDot = 0;
+    for (let i = 0; i < 16; i++) {
+      profDot += live.regProfile[i] * reg.regProfile[i];
+    }
+    const sProf = Math.max(0, Math.min(1, profDot));
+
+    // c. Chroma Similarity (komposisi rona warna kulit)
+    const diffChroma =
+      Math.abs(live.chroma[0] - reg.chroma[0]) +
+      Math.abs(live.chroma[1] - reg.chroma[1]) +
+      Math.abs(live.chroma[2] - reg.chroma[2]);
+    const sChroma = Math.max(0, 1 - diffChroma * 1.5);
+
+    return sLbp * 0.50 + sProf * 0.35 + sChroma * 0.15;
+  };
+
   // ══════════════ REAL-TIME CAMERA SCAN LIFECYCLE ══════════════
   useEffect(() => {
     if (!showFaceModal) {
       stopCamera();
+      setIsFaceMismatch(false);
       return;
     }
 
@@ -121,6 +239,7 @@ export default function LoginPage() {
       setCameraError(null);
       setCapturedPhoto(null);
       setLiveMatchScore(0);
+      setIsFaceMismatch(false);
       setScanStep("initializing");
       setScanProgress(15);
       setScanStatusText("Mengakses kamera depan Anda...");
@@ -150,18 +269,12 @@ export default function LoginPage() {
         return;
       }
 
-      // Pre-komputasi matriks biometrik dari foto hasil registrasi (48x48)
+      // Pre-komputasi matriks biometrik LBP dari foto hasil registrasi (48x48)
       const regCanvas = document.createElement("canvas");
       regCanvas.width = 48;
       regCanvas.height = 48;
       const regCtx = regCanvas.getContext("2d", { willReadFrequently: true });
-
-      let regLuma: Float32Array | null = null;
-      let regEdges: Float32Array | null = null;
-      let regMean = 0;
-      let regStd = 1;
-      let regRegions = new Float32Array(9);
-      let regTemplateReady = false;
+      let regDescriptor: BiometricDescriptor | null = null;
 
       if (storedPhoto && regCtx) {
         const regImg = new Image();
@@ -169,62 +282,11 @@ export default function LoginPage() {
         regImg.onload = () => {
           regCtx.drawImage(regImg, 0, 0, 48, 48);
           const raw = regCtx.getImageData(0, 0, 48, 48).data;
-          regLuma = new Float32Array(48 * 48);
-          regEdges = new Float32Array(48 * 48);
-
-          let sum = 0;
+          const rLuma = new Float32Array(48 * 48);
           for (let i = 0; i < 48 * 48; i++) {
-            const r = raw[i * 4];
-            const g = raw[i * 4 + 1];
-            const b = raw[i * 4 + 2];
-            const lum = (r * 299 + g * 587 + b * 114) / 1000;
-            regLuma[i] = lum;
-            sum += lum;
+            rLuma[i] = (raw[i * 4] * 299 + raw[i * 4 + 1] * 587 + raw[i * 4 + 2] * 114) / 1000;
           }
-          regMean = sum / (48 * 48);
-
-          let varSum = 0;
-          for (let i = 0; i < 48 * 48; i++) {
-            const diff = regLuma[i] - regMean;
-            varSum += diff * diff;
-          }
-          regStd = Math.sqrt(varSum / (48 * 48)) || 1;
-
-          // Sobel edge filter untuk kontur mata, alis, hidung, bibir
-          for (let y = 1; y < 47; y++) {
-            for (let x = 1; x < 47; x++) {
-              const gx =
-                -regLuma[(y - 1) * 48 + (x - 1)] +
-                regLuma[(y - 1) * 48 + (x + 1)] -
-                2 * regLuma[y * 48 + (x - 1)] +
-                2 * regLuma[y * 48 + (x + 1)] -
-                regLuma[(y + 1) * 48 + (x - 1)] +
-                regLuma[(y + 1) * 48 + (x + 1)];
-              const gy =
-                -regLuma[(y - 1) * 48 + (x - 1)] -
-                2 * regLuma[(y - 1) * 48 + x] -
-                regLuma[(y - 1) * 48 + (x + 1)] +
-                regLuma[(y + 1) * 48 + (x - 1)] +
-                2 * regLuma[(y + 1) * 48 + x] +
-                regLuma[(y + 1) * 48 + (x + 1)];
-              regEdges[y * 48 + x] = Math.sqrt(gx * gx + gy * gy);
-            }
-          }
-
-          // 3x3 Regional Block averages
-          for (let ry = 0; ry < 3; ry++) {
-            for (let rx = 0; rx < 3; rx++) {
-              let rSum = 0;
-              for (let y = ry * 16; y < (ry + 1) * 16; y++) {
-                for (let x = rx * 16; x < (rx + 1) * 16; x++) {
-                  rSum += regLuma[y * 48 + x];
-                }
-              }
-              regRegions[ry * 3 + rx] = rSum / 256;
-            }
-          }
-
-          regTemplateReady = true;
+          regDescriptor = extractBiometricDescriptor(rLuma, raw);
         };
         regImg.src = storedPhoto;
       }
@@ -289,7 +351,7 @@ export default function LoginPage() {
         const liveCtx = liveCanvas.getContext("2d", { willReadFrequently: true });
 
         let consecutiveMatches = 0;
-        let smoothedScore = 20;
+        let matchConfidence = 28;
 
         const processRealtimeMatching = () => {
           if (isCancelled || !videoRef.current) return;
@@ -305,12 +367,11 @@ export default function LoginPage() {
 
             const liveImgData = liveCtx.getImageData(0, 0, 48, 48).data;
 
-            // 1. Deteksi keberadaan wajah fisik di tengah bingkai (Skin tone & Luminance)
-            let skinPixels = 0;
+            // 1. Deteksi adaptif keberadaan wajah (Skin tone & Luminance)
+            let facePixels = 0;
             let centerLumaSum = 0;
             let centerCount = 0;
             const liveLuma = new Float32Array(48 * 48);
-            let liveSum = 0;
 
             for (let y = 0; y < 48; y++) {
               for (let x = 0; x < 48; x++) {
@@ -321,15 +382,16 @@ export default function LoginPage() {
                 const lum = (r * 299 + g * 587 + b * 114) / 1000;
                 const pos = y * 48 + x;
                 liveLuma[pos] = lum;
-                liveSum += lum;
 
-                // Skin tone heuristic in RGB
-                if (r > 42 && g > 24 && b > 18 && r > g && r - g > 8 && r > b) {
-                  skinPixels++;
+                const isFaceTone =
+                  (r > 20 && g > 15 && b > 10) &&
+                  ((r >= b * 0.75 && g >= b * 0.7) || (r > 35 && g > 25));
+
+                if (isFaceTone) {
+                  facePixels++;
                 }
 
-                // Elliptical center box
-                if (x >= 14 && x <= 34 && y >= 10 && y <= 38) {
+                if (x >= 12 && x <= 36 && y >= 8 && y <= 40) {
                   centerLumaSum += lum;
                   centerCount++;
                 }
@@ -337,167 +399,106 @@ export default function LoginPage() {
             }
 
             const centerAvgLuma = centerLumaSum / (centerCount || 1);
-            const hasFaceInView = skinPixels >= 55 && centerAvgLuma > 25 && centerAvgLuma < 245;
+
+            let centerVarianceSum = 0;
+            for (let y = 12; y <= 36; y++) {
+              for (let x = 12; x <= 36; x++) {
+                const diff = liveLuma[y * 48 + x] - centerAvgLuma;
+                centerVarianceSum += diff * diff;
+              }
+            }
+            const centerStd = Math.sqrt(centerVarianceSum / ((25 * 25) || 1));
+
+            // Wajah terdeteksi jika ada piksel wajah dan kontur/variansi fitur wajah
+            const hasFaceInView = facePixels >= 40 && centerAvgLuma > 15 && centerAvgLuma < 250 && centerStd > 6;
 
             if (!hasFaceInView) {
+              setIsFaceMismatch(false);
               setScanStatusText("Arahkan wajah Anda ke dalam bingkai...");
-              smoothedScore = smoothedScore * 0.7 + 15 * 0.3;
-              const displayScore = Math.round(smoothedScore);
+              matchConfidence = Math.max(18, matchConfidence - 2.5);
+              const displayScore = Math.round(matchConfidence);
               setLiveMatchScore(displayScore);
-              setScanProgress(Math.max(15, displayScore));
+              setScanProgress(displayScore);
               consecutiveMatches = 0;
-            } else if (!regTemplateReady || !regLuma || !regEdges) {
+            } else if (!regDescriptor) {
               setScanStatusText("Memuat data biometrik terdaftar...");
-              smoothedScore = smoothedScore * 0.7 + 30 * 0.3;
-              const displayScore = Math.round(smoothedScore);
-              setLiveMatchScore(displayScore);
-              setScanProgress(displayScore);
             } else {
-              // 2. Real-time comparison terhadap template foto registrasi
-              const liveMean = liveSum / (48 * 48);
-              let liveVarSum = 0;
-              for (let i = 0; i < 48 * 48; i++) {
-                const d = liveLuma[i] - liveMean;
-                liveVarSum += d * d;
-              }
-              const liveStd = Math.sqrt(liveVarSum / (48 * 48)) || 1;
+              // 2. Ekstraksi Fitur Biometrik Live & Bandingkan dengan Foto Master Terdaftar
+              const liveDescriptor = extractBiometricDescriptor(liveLuma, liveImgData);
+              const similarity = calculateBiometricSimilarity(liveDescriptor, regDescriptor);
 
-              // Hitung live Sobel edges
-              const liveEdges = new Float32Array(48 * 48);
-              for (let y = 1; y < 47; y++) {
-                for (let x = 1; x < 47; x++) {
-                  const gx =
-                    -liveLuma[(y - 1) * 48 + (x - 1)] +
-                    liveLuma[(y - 1) * 48 + (x + 1)] -
-                    2 * liveLuma[y * 48 + (x - 1)] +
-                    2 * liveLuma[y * 48 + (x + 1)] -
-                    liveLuma[(y + 1) * 48 + (x - 1)] +
-                    liveLuma[(y + 1) * 48 + (x + 1)];
-                  const gy =
-                    -liveLuma[(y - 1) * 48 + (x - 1)] -
-                    2 * liveLuma[(y - 1) * 48 + x] -
-                    liveLuma[(y - 1) * 48 + (x + 1)] +
-                    liveLuma[(y + 1) * 48 + (x - 1)] +
-                    2 * liveLuma[(y + 1) * 48 + x] +
-                    liveLuma[(y + 1) * 48 + (x + 1)];
-                  liveEdges[y * 48 + x] = Math.sqrt(gx * gx + gy * gy);
-                }
-              }
+              // ══════════════════════════════════════════════════════════════════════════
+              // EVALUASI KESESUAIAN BIOMETRIK: THRESHOLD 65%
+              // ══════════════════════════════════════════════════════════════════════════
+              if (similarity < 0.65) {
+                // ─── WAJAH BERBEDA / TEMAN / BUKAN PEMILIK AKUN YANG TERDAFTAR ───
+                setIsFaceMismatch(true);
+                consecutiveMatches = 0;
+                matchConfidence = Math.max(15, matchConfidence - 3.5);
+                const displayScore = Math.min(52, Math.max(15, Math.round(similarity * 100)));
 
-              // a. Zero-mean Normalized Cross-Correlation (ZNCC) dengan toleransi micro-shift ±1px
-              let bestCorrelation = -1;
-              for (const dy of [-1, 0, 1]) {
-                for (const dx of [-1, 0, 1]) {
-                  let corr = 0;
-                  let count = 0;
-                  for (let y = 2; y < 46; y++) {
-                    const ly = y + dy;
-                    if (ly < 0 || ly >= 48) continue;
-                    for (let x = 2; x < 46; x++) {
-                      const lx = x + dx;
-                      if (lx < 0 || lx >= 48) continue;
-                      corr += (liveLuma[ly * 48 + lx] - liveMean) * (regLuma[y * 48 + x] - regMean);
-                      count++;
-                    }
-                  }
-                  const rVal = corr / (liveStd * regStd * (count || 1));
-                  if (rVal > bestCorrelation) bestCorrelation = rVal;
-                }
-              }
-
-              // b. Edge/Contour Alignment (Membandingkan garis mata, hidung, bibir)
-              let edgeDiffSum = 0;
-              let edgeCount = 0;
-              for (let i = 0; i < 48 * 48; i++) {
-                if (regEdges[i] > 15 || liveEdges[i] > 15) {
-                  edgeDiffSum += Math.abs(regEdges[i] - liveEdges[i]);
-                  edgeCount++;
-                }
-              }
-              const avgEdgeDiff = edgeDiffSum / (edgeCount || 1);
-              const edgeSim = Math.max(0, 1 - avgEdgeDiff / 120);
-
-              // c. 3x3 Regional Block Similarity
-              let regionDiffSum = 0;
-              for (let ry = 0; ry < 3; ry++) {
-                for (let rx = 0; rx < 3; rx++) {
-                  let rSum = 0;
-                  for (let y = ry * 16; y < (ry + 1) * 16; y++) {
-                    for (let x = rx * 16; x < (rx + 1) * 16; x++) {
-                      rSum += liveLuma[y * 48 + x];
-                    }
-                  }
-                  const liveReg = rSum / 256;
-                  regionDiffSum += Math.abs(liveReg - regRegions[ry * 3 + rx]);
-                }
-              }
-              const regionSim = Math.max(0, 1 - (regionDiffSum / 9) / 80);
-
-              // Normalisasi skor akhir
-              const normCorr = Math.max(0, (bestCorrelation + 0.25) / 1.25);
-              const compositeMatch = normCorr * 0.45 + edgeSim * 0.35 + regionSim * 0.20;
-              const instantScore = Math.round(compositeMatch * 100);
-
-              // Smooth score interpolation untuk responsivitas visual yang mulus
-              smoothedScore = smoothedScore * 0.45 + instantScore * 0.55;
-              const displayScore = Math.min(99, Math.max(25, Math.round(smoothedScore)));
-              setLiveMatchScore(displayScore);
-              setScanProgress(displayScore);
-
-              if (displayScore >= 68) {
-                setScanStatusText(`Mencocokkan Biometrik: ${displayScore}% (Wajah Sesuai)...`);
-                consecutiveMatches++;
+                setLiveMatchScore(displayScore);
+                setScanProgress(displayScore);
+                setScanStatusText(`Wajah Tidak Cocok (${displayScore}%) — Bukan ${storedName}`);
+                // DIJAMIN TIDAK AKAN LOGIN KARENA consecutiveMatches TIDAK AKAN NAIK
               } else {
-                setScanStatusText(`Menganalisis Biometrik: ${displayScore}%...`);
-                consecutiveMatches = Math.max(0, consecutiveMatches - 1);
-              }
+                // ─── WAJAH COCOK DENGAN HASIL REGISTRASI ───
+                setIsFaceMismatch(false);
+                matchConfidence = Math.min(100, matchConfidence + 4.8);
+                const displayScore = Math.min(99, Math.round(matchConfidence));
 
-              // ══════════════ WAJAH COCOK & TERVERIFIKASI ══════════════
-              if (consecutiveMatches >= 6) {
-                if (matchLoopAnimId) cancelAnimationFrame(matchLoopAnimId);
+                setLiveMatchScore(displayScore);
+                setScanProgress(displayScore);
+                setScanStatusText(`Wajah Sesuai: ${storedName} (${displayScore}%)...`);
+                consecutiveMatches++;
 
-                // Capture snapshot dari live video
-                if (videoRef.current) {
-                  try {
-                    const snapCanvas = document.createElement("canvas");
-                    snapCanvas.width = video.videoWidth || 640;
-                    snapCanvas.height = video.videoHeight || 480;
-                    const sCtx = snapCanvas.getContext("2d");
-                    if (sCtx) {
-                      sCtx.translate(snapCanvas.width, 0);
-                      sCtx.scale(-1, 1);
-                      sCtx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
-                      setCapturedPhoto(snapCanvas.toDataURL("image/jpeg", 0.92));
+                // ══════════════ WAJAH COCOK & TERVERIFIKASI ══════════════
+                if (consecutiveMatches >= 4 && matchConfidence >= 80) {
+                  if (matchLoopAnimId) cancelAnimationFrame(matchLoopAnimId);
+
+                  // Capture snapshot dari live video
+                  if (videoRef.current) {
+                    try {
+                      const snapCanvas = document.createElement("canvas");
+                      snapCanvas.width = video.videoWidth || 640;
+                      snapCanvas.height = video.videoHeight || 480;
+                      const sCtx = snapCanvas.getContext("2d");
+                      if (sCtx) {
+                        sCtx.translate(snapCanvas.width, 0);
+                        sCtx.scale(-1, 1);
+                        sCtx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
+                        setCapturedPhoto(snapCanvas.toDataURL("image/jpeg", 0.92));
+                      }
+                    } catch (e) {
+                      console.warn(e);
                     }
-                  } catch (e) {
-                    console.warn(e);
                   }
-                }
 
-                stopCamera();
-                setScanStep("success");
-                setScanProgress(100);
-                setLiveMatchScore(100);
-                setScanStatusText(`Wajah Terverifikasi: ${storedName}`);
-                playFaceIdChime();
+                  stopCamera();
+                  setScanStep("success");
+                  setScanProgress(100);
+                  setLiveMatchScore(100);
+                  setScanStatusText(`Wajah Terverifikasi: ${storedName}`);
+                  playFaceIdChime();
 
-                let count = 2;
-                setRedirectCountdown(count);
-                const interval = setInterval(() => {
-                  count -= 1;
+                  let count = 2;
                   setRedirectCountdown(count);
-                  if (count <= 0) {
-                    clearInterval(interval);
-                    setShowFaceModal(false);
-                    markUserLoggedIn();
-                    toast.success("Login Face ID Berhasil!", {
-                      description: `Selamat datang kembali, ${storedName}!`,
-                    });
-                    window.location.href = "/";
-                  }
-                }, 1000);
-                timers.push(interval as any);
-                return;
+                  const interval = setInterval(() => {
+                    count -= 1;
+                    setRedirectCountdown(count);
+                    if (count <= 0) {
+                      clearInterval(interval);
+                      setShowFaceModal(false);
+                      markUserLoggedIn();
+                      toast.success("Login Face ID Berhasil!", {
+                        description: `Selamat datang kembali, ${storedName}!`,
+                      });
+                      window.location.href = "/";
+                    }
+                  }, 1000);
+                  timers.push(interval as any);
+                  return;
+                }
               }
             }
           }
@@ -1091,7 +1092,15 @@ export default function LoginPage() {
                 <path
                   d="M 12 38 L 12 24 A 12 12 0 0 1 24 12 L 38 12"
                   fill="none"
-                  stroke={scanStep === "success" || liveMatchScore >= 68 ? "#34c759" : "#38bdf8"}
+                  stroke={
+                    scanStep === "success"
+                      ? "#34c759"
+                      : isFaceMismatch
+                      ? "#f43f5e"
+                      : liveMatchScore >= 68
+                      ? "#34c759"
+                      : "#38bdf8"
+                  }
                   strokeWidth={scanStep === "success" ? "3.5" : "3"}
                   strokeLinecap="round"
                   className="transition-colors duration-200"
@@ -1100,7 +1109,15 @@ export default function LoginPage() {
                 <path
                   d="M 172 12 L 186 12 A 12 12 0 0 1 198 24 L 198 38"
                   fill="none"
-                  stroke={scanStep === "success" || liveMatchScore >= 68 ? "#34c759" : "#38bdf8"}
+                  stroke={
+                    scanStep === "success"
+                      ? "#34c759"
+                      : isFaceMismatch
+                      ? "#f43f5e"
+                      : liveMatchScore >= 68
+                      ? "#34c759"
+                      : "#38bdf8"
+                  }
                   strokeWidth={scanStep === "success" ? "3.5" : "3"}
                   strokeLinecap="round"
                   className="transition-colors duration-200"
@@ -1109,7 +1126,15 @@ export default function LoginPage() {
                 <path
                   d="M 12 172 L 12 186 A 12 12 0 0 0 24 198 L 38 198"
                   fill="none"
-                  stroke={scanStep === "success" || liveMatchScore >= 68 ? "#34c759" : "#38bdf8"}
+                  stroke={
+                    scanStep === "success"
+                      ? "#34c759"
+                      : isFaceMismatch
+                      ? "#f43f5e"
+                      : liveMatchScore >= 68
+                      ? "#34c759"
+                      : "#38bdf8"
+                  }
                   strokeWidth={scanStep === "success" ? "3.5" : "3"}
                   strokeLinecap="round"
                   className="transition-colors duration-200"
@@ -1118,7 +1143,15 @@ export default function LoginPage() {
                 <path
                   d="M 172 198 L 186 198 A 12 12 0 0 0 198 186 L 198 172"
                   fill="none"
-                  stroke={scanStep === "success" || liveMatchScore >= 68 ? "#34c759" : "#38bdf8"}
+                  stroke={
+                    scanStep === "success"
+                      ? "#34c759"
+                      : isFaceMismatch
+                      ? "#f43f5e"
+                      : liveMatchScore >= 68
+                      ? "#34c759"
+                      : "#38bdf8"
+                  }
                   strokeWidth={scanStep === "success" ? "3.5" : "3"}
                   strokeLinecap="round"
                   className="transition-colors duration-200"
@@ -1130,6 +1163,8 @@ export default function LoginPage() {
                 className={`relative w-40 h-40 rounded-[28px] overflow-hidden bg-black/90 border transition-all duration-300 flex items-center justify-center ${
                   scanStep === "success"
                     ? "border-[#34c759]/50 shadow-[0_0_35px_rgba(52,199,89,0.3)]"
+                    : isFaceMismatch
+                    ? "border-rose-500/60 shadow-[0_0_25px_rgba(244,63,94,0.35)]"
                     : liveMatchScore >= 68
                     ? "border-[#34c759]/40 shadow-[0_0_25px_rgba(52,199,89,0.25)]"
                     : "border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.8)]"
@@ -1169,7 +1204,9 @@ export default function LoginPage() {
                 {scanStep !== "success" && hasCamera && (
                   <div
                     className={`absolute inset-x-0 top-0 h-[2px] transition-colors duration-200 pointer-events-none animate-scan ${
-                      liveMatchScore >= 68
+                      isFaceMismatch
+                        ? "bg-gradient-to-r from-transparent via-rose-500 to-transparent shadow-[0_0_12px_#f43f5e]"
+                        : liveMatchScore >= 68
                         ? "bg-gradient-to-r from-transparent via-[#34c759] to-transparent shadow-[0_0_12px_#34c759]"
                         : "bg-gradient-to-r from-transparent via-[#38bdf8] to-transparent shadow-[0_0_12px_#38bdf8]"
                     }`}
@@ -1196,7 +1233,9 @@ export default function LoginPage() {
                     <span className="text-slate-400 flex items-center gap-1.5 text-[10.5px]">
                       <span
                         className={`w-1.5 h-1.5 rounded-full ${
-                          liveMatchScore >= 68
+                          isFaceMismatch
+                            ? "bg-rose-500 animate-pulse"
+                            : liveMatchScore >= 68
                             ? "bg-[#34c759] animate-ping"
                             : "bg-sky-400 animate-pulse"
                         }`}
@@ -1205,7 +1244,11 @@ export default function LoginPage() {
                     </span>
                     <span
                       className={`font-mono text-xs font-bold transition-colors ${
-                        liveMatchScore >= 68 ? "text-[#34c759]" : "text-sky-400"
+                        isFaceMismatch
+                          ? "text-rose-400"
+                          : liveMatchScore >= 68
+                          ? "text-[#34c759]"
+                          : "text-sky-400"
                       }`}
                     >
                       {liveMatchScore}%
@@ -1214,7 +1257,9 @@ export default function LoginPage() {
                   <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
                     <div
                       className={`h-full transition-all duration-150 rounded-full ${
-                        liveMatchScore >= 68
+                        isFaceMismatch
+                          ? "bg-rose-500 shadow-[0_0_8px_#f43f5e]"
+                          : liveMatchScore >= 68
                           ? "bg-[#34c759] shadow-[0_0_8px_#34c759]"
                           : "bg-sky-400 shadow-[0_0_8px_#38bdf8]"
                       }`}
@@ -1224,7 +1269,11 @@ export default function LoginPage() {
                 </div>
 
                 {/* Status text */}
-                <p className="text-xs text-slate-400 font-medium h-4 flex items-center justify-center gap-1.5 px-2 truncate">
+                <p
+                  className={`text-xs font-medium h-4 flex items-center justify-center gap-1.5 px-2 truncate transition-colors ${
+                    isFaceMismatch ? "text-rose-400 font-semibold" : "text-slate-400"
+                  }`}
+                >
                   <span>{scanStatusText}</span>
                 </p>
 
