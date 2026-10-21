@@ -616,23 +616,10 @@ export default function ProfileSettingsModal({
                     </div>
 
                     {/* Status Chip */}
-                    <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-100/80 border border-emerald-300 text-emerald-800 text-[10.5px] font-bold mb-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-100/80 border border-emerald-300 text-emerald-800 text-[11px] font-bold">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                       <span>Face ID Aktif & Terlindungi</span>
                     </div>
-
-                    <h4 className="text-[14px] font-black text-slate-800">
-                      {profileForm.name || "Eki Permadi Nugraha"}
-                    </h4>
-                    <p className="text-[10.5px] text-slate-400 font-medium mt-0.5">
-                      NIP: {profileForm.nip || "BMG250001"}
-                    </p>
-
-                    {faceRegisteredAt && (
-                      <p className="text-[10px] text-slate-400 mt-1 italic">
-                        Terdaftar: {faceRegisteredAt}
-                      </p>
-                    )}
                   </div>
 
                   {/* Actions: Scan Ulang & Hapus */}
