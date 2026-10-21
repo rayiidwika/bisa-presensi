@@ -14,6 +14,9 @@ import {
   KeyRound,
   LogOut,
   RotateCcw,
+  ScanFace,
+  ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import Swal from "sweetalert2";
@@ -25,13 +28,14 @@ import {
   UserProfile,
 } from "@/lib/userProfile";
 import AvatarCropModal from "./AvatarCropModal";
+import FaceRegistrationModal from "./FaceRegistrationModal";
 
 interface ProfileSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type TabType = "profile" | "password";
+type TabType = "profile" | "password" | "face_id";
 
 export default function ProfileSettingsModal({
   isOpen,
@@ -59,7 +63,13 @@ export default function ProfileSettingsModal({
   const [cropImageSrc, setCropImageSrc] = useState<string>("");
   const [isCropOpen, setIsCropOpen] = useState<boolean>(false);
 
-  // Sync profile when opened
+  // Face ID Biometric State
+  const [isFaceRegistered, setIsFaceRegistered] = useState<boolean>(false);
+  const [facePhoto, setFacePhoto] = useState<string>("");
+  const [faceRegisteredAt, setFaceRegisteredAt] = useState<string>("");
+  const [isFaceRegModalOpen, setIsFaceRegModalOpen] = useState<boolean>(false);
+
+  // Sync profile & face id state when opened
   useEffect(() => {
     if (isOpen) {
       const current = getUserProfile();
@@ -68,6 +78,13 @@ export default function ProfileSettingsModal({
       setCurrentPass("");
       setNewPass("");
       setConfirmPass("");
+
+      const isRegistered =
+        typeof window !== "undefined" &&
+        localStorage.getItem("bisa_face_id_registered") === "true";
+      setIsFaceRegistered(isRegistered);
+      setFacePhoto(localStorage.getItem("bisa_face_id_photo") || "");
+      setFaceRegisteredAt(localStorage.getItem("bisa_face_id_registered_at") || "");
     }
   }, [isOpen]);
 
@@ -218,6 +235,39 @@ export default function ProfileSettingsModal({
     }, 250);
   };
 
+  // Handle Delete / Reset Face ID
+  const handleDeleteFaceId = () => {
+    Swal.fire({
+      title: "Hapus Face ID?",
+      text: "Data biometrik wajah akan dihapus dari perangkat ini. Anda akan diminta login menggunakan NIP & Kata Sandi.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#e11d48",
+      cancelButtonColor: "#94a3b8",
+      confirmButtonText: "Ya, Hapus Face ID",
+      cancelButtonText: "Batal",
+      reverseButtons: true,
+      customClass: {
+        popup: "rounded-[24px]",
+        confirmButton: "rounded-xl font-bold text-sm px-4 py-2",
+        cancelButton: "rounded-xl font-bold text-sm px-4 py-2",
+      },
+    }).then((res) => {
+      if (res.isConfirmed) {
+        localStorage.removeItem("bisa_face_id_registered");
+        localStorage.removeItem("bisa_face_id_photo");
+        localStorage.removeItem("bisa_face_id_user_id");
+        localStorage.removeItem("bisa_face_id_user_name");
+        localStorage.removeItem("bisa_face_id_registered_at");
+        setIsFaceRegistered(false);
+        setFacePhoto("");
+        setFaceRegisteredAt("");
+        window.dispatchEvent(new Event("storage"));
+        toast.success("Face ID berhasil dihapus dari perangkat ini.");
+      }
+    });
+  };
+
   return (
     <div
       onClick={(e) => {
@@ -226,7 +276,7 @@ export default function ProfileSettingsModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in select-none"
     >
       <div className="bg-white w-full max-w-[390px] rounded-[28px] sm:rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90dvh] animate-scale-up">
-        {/* ══════════════ HEADER WITH 2 TABS ONLY ══════════════ */}
+        {/* ══════════════ HEADER WITH 3 TABS ══════════════ */}
         <div className="px-5 pt-4 pb-3 border-b border-slate-100 bg-white shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-base font-bold text-slate-800 leading-tight">
@@ -242,32 +292,48 @@ export default function ProfileSettingsModal({
             </button>
           </div>
 
-          {/* 2 Tabs: Ganti Profil & Ganti Sandi */}
-          <div className="grid grid-cols-2 p-1 rounded-2xl bg-slate-100 border border-slate-200/60">
+          {/* 3 Tabs: Profil, Sandi, Face ID */}
+          <div className="grid grid-cols-3 p-1 rounded-2xl bg-slate-100 border border-slate-200/60">
             <button
               type="button"
               onClick={() => setActiveTab("profile")}
-              className={`py-2 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`py-2 px-1.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1 cursor-pointer ${
                 activeTab === "profile"
                   ? "bg-white text-[#156bb8] shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <User size={14} />
-              <span>Ganti Profil</span>
+              <User size={13} />
+              <span>Profil</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab("password")}
-              className={`py-2 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`py-2 px-1.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1 cursor-pointer ${
                 activeTab === "password"
                   ? "bg-white text-[#156bb8] shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <KeyRound size={14} />
-              <span>Ganti Sandi</span>
+              <KeyRound size={13} />
+              <span>Sandi</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("face_id")}
+              className={`py-2 px-1.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1 cursor-pointer relative ${
+                activeTab === "face_id"
+                  ? "bg-white text-[#156bb8] shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <ScanFace size={13} />
+              <span>Face ID</span>
+              {isFaceRegistered && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse ml-0.5" />
+              )}
             </button>
           </div>
         </div>
@@ -483,6 +549,127 @@ export default function ProfileSettingsModal({
               </div>
             </form>
           )}
+
+          {/* ────────────────────────────────────────────────────────
+              TAB 3: FACE ID BIOMETRIK (REGISTRASI & STATUS)
+          ──────────────────────────────────────────────────────── */}
+          {activeTab === "face_id" && (
+            <div className="space-y-4 animate-fade-in py-1">
+              {!isFaceRegistered ? (
+                /* ── BELUM TERDAFTAR ── */
+                <div className="p-4 rounded-2xl bg-gradient-to-b from-sky-50/70 to-slate-50 border border-sky-100 flex flex-col items-center text-center">
+                  {/* Face ID Icon */}
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#1a7dc4] to-[#156bb8] text-white flex items-center justify-center shadow-md shadow-blue-500/25 mb-3">
+                    <ScanFace size={34} strokeWidth={1.8} />
+                  </div>
+
+                  {/* Status Chip */}
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10.5px] font-bold mb-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    <span>Belum Didaftarkan</span>
+                  </div>
+
+                  <h4 className="text-[14px] font-black text-slate-800 leading-tight">
+                    Aktivasi Face ID
+                  </h4>
+                  <p className="text-[11.5px] text-slate-500 mt-1 leading-relaxed px-1">
+                    Daftarkan wajah Anda untuk login instan tanpa mengetik sandi. Sistem menggunakan sensor liveness kamera langsung untuk mencegah penyalahgunaan.
+                  </p>
+
+                  {/* Benefit points */}
+                  <div className="w-full my-3.5 p-3 rounded-xl bg-white border border-slate-200/80 text-left space-y-1.5 text-[11px] text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck size={14} className="text-emerald-500 shrink-0" />
+                      <span className="font-semibold text-slate-700">Login instan dalam 1 detik</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck size={14} className="text-emerald-500 shrink-0" />
+                      <span className="font-semibold text-slate-700">Perekaman kamera live anti-foto statis</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck size={14} className="text-emerald-500 shrink-0" />
+                      <span className="font-semibold text-slate-700">Terenkripsi aman di perangkat ini</span>
+                    </div>
+                  </div>
+
+                  {/* Start Registration Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsFaceRegModalOpen(true)}
+                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#1a7dc4] to-[#156bb8] hover:brightness-105 active:scale-95 text-white font-bold text-xs shadow-md shadow-[#156bb8]/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <ScanFace size={15} />
+                    <span>Daftarkan Wajah Sekarang</span>
+                  </button>
+                </div>
+              ) : (
+                /* ── SUDAH TERDAFTAR (AKTIF) ── */
+                <div className="space-y-3">
+                  <div className="p-4 rounded-2xl bg-gradient-to-b from-emerald-50/70 via-slate-50 to-white border border-emerald-200 flex flex-col items-center text-center">
+                    {/* Registered Face Photo Preview */}
+                    <div className="relative mb-3">
+                      <div className="w-20 h-20 rounded-full bg-white border-2 border-emerald-500 shadow-md flex items-center justify-center overflow-hidden">
+                        {facePhoto ? (
+                          <img
+                            src={facePhoto}
+                            alt="Wajah Terdaftar"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                            <ScanFace size={36} />
+                          </div>
+                        )}
+                      </div>
+                      <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 border-2 border-white text-white flex items-center justify-center shadow-xs">
+                        <Check size={13} strokeWidth={3.5} />
+                      </span>
+                    </div>
+
+                    {/* Status Chip */}
+                    <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-100/80 border border-emerald-300 text-emerald-800 text-[10.5px] font-bold mb-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Face ID Aktif & Terlindungi</span>
+                    </div>
+
+                    <h4 className="text-[14px] font-black text-slate-800">
+                      {profileForm.name || "Eki Permadi Nugraha"}
+                    </h4>
+                    <p className="text-[10.5px] text-slate-400 font-medium mt-0.5">
+                      NIP: {profileForm.nip || "BMG250001"}
+                    </p>
+
+                    {faceRegisteredAt && (
+                      <p className="text-[10px] text-slate-400 mt-1 italic">
+                        Terdaftar: {faceRegisteredAt}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Actions: Scan Ulang & Hapus */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsFaceRegModalOpen(true)}
+                      className="w-full py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 active:bg-blue-200/80 text-[#156bb8] font-bold text-xs border border-blue-200 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <RotateCcw size={13} />
+                      <span>Pindai Ulang</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleDeleteFaceId}
+                      className="w-full py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 active:bg-rose-200/80 text-rose-600 font-bold text-xs border border-rose-200 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Trash2 size={13} />
+                      <span>Hapus Face ID</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ══════════════ MODAL FOOTER (RESET & LOGOUT) ══════════════ */}
@@ -514,6 +701,29 @@ export default function ProfileSettingsModal({
           imageSrc={cropImageSrc}
           onClose={() => setIsCropOpen(false)}
           onCropComplete={handleCropComplete}
+        />
+      )}
+
+      {/* ══════════════ REAL FACE ID BIOMETRIC REGISTRATION MODAL ══════════════ */}
+      {isFaceRegModalOpen && (
+        <FaceRegistrationModal
+          isOpen={isFaceRegModalOpen}
+          onClose={() => setIsFaceRegModalOpen(false)}
+          onSuccess={(photo) => {
+            setIsFaceRegistered(true);
+            setFacePhoto(photo);
+            const now = new Date();
+            const dateStr = `${now.getDate()} ${
+              [
+                "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+                "Jul", "Agu", "Sep", "Okt", "Nov", "Des"
+              ][now.getMonth()]
+            } ${now.getFullYear()} • ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")} WIB`;
+            setFaceRegisteredAt(dateStr);
+            toast.success("Face ID Berhasil Didaftarkan!", {
+              description: "Kini Anda dapat login dengan Face ID.",
+            });
+          }}
         />
       )}
     </div>

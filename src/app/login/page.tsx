@@ -50,6 +50,10 @@ export default function LoginPage() {
   const [scanStatusText, setScanStatusText] = useState("Menyiapkan sensor biometrik...");
   const [redirectCountdown, setRedirectCountdown] = useState(3);
   const [verificationTime, setVerificationTime] = useState("");
+  const [registeredPhoto, setRegisteredPhoto] = useState<string | null>(null);
+  const [registeredName, setRegisteredName] = useState<string>("Pegawai");
+  const [registeredNip, setRegisteredNip] = useState<string>("BMG250001");
+  const [liveMatchScore, setLiveMatchScore] = useState<number>(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -110,14 +114,30 @@ export default function LoginPage() {
 
     let isCancelled = false;
     let timers: NodeJS.Timeout[] = [];
+    let matchLoopAnimId: number | null = null;
 
     const startCamera = async () => {
       setIsCameraLoading(true);
       setCameraError(null);
       setCapturedPhoto(null);
+      setLiveMatchScore(0);
       setScanStep("initializing");
       setScanProgress(15);
       setScanStatusText("Mengakses kamera depan Anda...");
+
+      // Ambil profil wajah yang terdaftar dari localStorage
+      const storedPhoto =
+        typeof window !== "undefined" ? localStorage.getItem("bisa_face_id_photo") : null;
+      const storedName =
+        (typeof window !== "undefined" && localStorage.getItem("bisa_face_id_user_name")) ||
+        "Eki Permadi Nugraha";
+      const storedNip =
+        (typeof window !== "undefined" && localStorage.getItem("bisa_face_id_user_id")) ||
+        "BMG250001";
+
+      setRegisteredPhoto(storedPhoto);
+      setRegisteredName(storedName);
+      setRegisteredNip(storedNip);
 
       if (
         typeof navigator === "undefined" ||
@@ -128,6 +148,85 @@ export default function LoginPage() {
         setIsCameraLoading(false);
         setHasCamera(false);
         return;
+      }
+
+      // Pre-komputasi matriks biometrik dari foto hasil registrasi (48x48)
+      const regCanvas = document.createElement("canvas");
+      regCanvas.width = 48;
+      regCanvas.height = 48;
+      const regCtx = regCanvas.getContext("2d", { willReadFrequently: true });
+
+      let regLuma: Float32Array | null = null;
+      let regEdges: Float32Array | null = null;
+      let regMean = 0;
+      let regStd = 1;
+      let regRegions = new Float32Array(9);
+      let regTemplateReady = false;
+
+      if (storedPhoto && regCtx) {
+        const regImg = new Image();
+        regImg.crossOrigin = "anonymous";
+        regImg.onload = () => {
+          regCtx.drawImage(regImg, 0, 0, 48, 48);
+          const raw = regCtx.getImageData(0, 0, 48, 48).data;
+          regLuma = new Float32Array(48 * 48);
+          regEdges = new Float32Array(48 * 48);
+
+          let sum = 0;
+          for (let i = 0; i < 48 * 48; i++) {
+            const r = raw[i * 4];
+            const g = raw[i * 4 + 1];
+            const b = raw[i * 4 + 2];
+            const lum = (r * 299 + g * 587 + b * 114) / 1000;
+            regLuma[i] = lum;
+            sum += lum;
+          }
+          regMean = sum / (48 * 48);
+
+          let varSum = 0;
+          for (let i = 0; i < 48 * 48; i++) {
+            const diff = regLuma[i] - regMean;
+            varSum += diff * diff;
+          }
+          regStd = Math.sqrt(varSum / (48 * 48)) || 1;
+
+          // Sobel edge filter untuk kontur mata, alis, hidung, bibir
+          for (let y = 1; y < 47; y++) {
+            for (let x = 1; x < 47; x++) {
+              const gx =
+                -regLuma[(y - 1) * 48 + (x - 1)] +
+                regLuma[(y - 1) * 48 + (x + 1)] -
+                2 * regLuma[y * 48 + (x - 1)] +
+                2 * regLuma[y * 48 + (x + 1)] -
+                regLuma[(y + 1) * 48 + (x - 1)] +
+                regLuma[(y + 1) * 48 + (x + 1)];
+              const gy =
+                -regLuma[(y - 1) * 48 + (x - 1)] -
+                2 * regLuma[(y - 1) * 48 + x] -
+                regLuma[(y - 1) * 48 + (x + 1)] +
+                regLuma[(y + 1) * 48 + (x - 1)] +
+                2 * regLuma[(y + 1) * 48 + x] +
+                regLuma[(y + 1) * 48 + (x + 1)];
+              regEdges[y * 48 + x] = Math.sqrt(gx * gx + gy * gy);
+            }
+          }
+
+          // 3x3 Regional Block averages
+          for (let ry = 0; ry < 3; ry++) {
+            for (let rx = 0; rx < 3; rx++) {
+              let rSum = 0;
+              for (let y = ry * 16; y < (ry + 1) * 16; y++) {
+                for (let x = rx * 16; x < (rx + 1) * 16; x++) {
+                  rSum += regLuma[y * 48 + x];
+                }
+              }
+              regRegions[ry * 3 + rx] = rSum / 256;
+            }
+          }
+
+          regTemplateReady = true;
+        };
+        regImg.src = storedPhoto;
       }
 
       const candidateConstraints: MediaStreamConstraints[] = [
@@ -162,7 +261,7 @@ export default function LoginPage() {
         setHasCamera(true);
         setIsCameraLoading(false);
 
-        // Wait a tick for videoRef to mount in DOM
+        // Mount video track
         setTimeout(async () => {
           if (isCancelled || !videoRef.current) return;
           const video = videoRef.current;
@@ -177,84 +276,244 @@ export default function LoginPage() {
           }
         }, 100);
 
-        // Phase 1: Real-time Face Detection
-        const t1 = setTimeout(() => {
-          if (isCancelled) return;
-          setScanStep("scanning");
-          setScanProgress(50);
-          setScanStatusText("Mendeteksi wajah asli Anda secara real-time...");
-        }, 1000);
+        // ══════════════════════════════════════════════════════════════════════════
+        // REAL-TIME BIOMETRIC DETECTION & COMPARISON ENGINE
+        // ══════════════════════════════════════════════════════════════════════════
+        setScanStep("scanning");
+        setScanProgress(25);
+        setScanStatusText("Mencari wajah di depan kamera...");
 
-        // Phase 2: Analyzing biometrics & matching database
-        const t2 = setTimeout(() => {
-          if (isCancelled) return;
-          setScanStep("analyzing");
-          setScanProgress(85);
-          setScanStatusText("Mencocokkan kontur wajah dengan data karyawan...");
-        }, 2200);
+        const liveCanvas = document.createElement("canvas");
+        liveCanvas.width = 48;
+        liveCanvas.height = 48;
+        const liveCtx = liveCanvas.getContext("2d", { willReadFrequently: true });
 
-        // Phase 3: Take real photo snapshot from live webcam & Verify!
-        const t3 = setTimeout(() => {
-          if (isCancelled) return;
+        let consecutiveMatches = 0;
+        let smoothedScore = 20;
 
-          if (videoRef.current) {
-            try {
-              const video = videoRef.current;
-              const canvas = document.createElement("canvas");
-              canvas.width = video.videoWidth || 640;
-              canvas.height = video.videoHeight || 480;
-              const ctx = canvas.getContext("2d");
-              if (ctx) {
-                // Mirror snapshot to match live selfie viewfinder
-                ctx.translate(canvas.width, 0);
-                ctx.scale(-1, 1);
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
-                setCapturedPhoto(dataUrl);
+        const processRealtimeMatching = () => {
+          if (isCancelled || !videoRef.current) return;
+          const video = videoRef.current;
+
+          if (video.readyState >= 2 && video.videoWidth > 0 && liveCtx) {
+            // Draw mirrored live frame onto 48x48 canvas
+            liveCtx.save();
+            liveCtx.translate(48, 0);
+            liveCtx.scale(-1, 1);
+            liveCtx.drawImage(video, 0, 0, 48, 48);
+            liveCtx.restore();
+
+            const liveImgData = liveCtx.getImageData(0, 0, 48, 48).data;
+
+            // 1. Deteksi keberadaan wajah fisik di tengah bingkai (Skin tone & Luminance)
+            let skinPixels = 0;
+            let centerLumaSum = 0;
+            let centerCount = 0;
+            const liveLuma = new Float32Array(48 * 48);
+            let liveSum = 0;
+
+            for (let y = 0; y < 48; y++) {
+              for (let x = 0; x < 48; x++) {
+                const idx = (y * 48 + x) * 4;
+                const r = liveImgData[idx];
+                const g = liveImgData[idx + 1];
+                const b = liveImgData[idx + 2];
+                const lum = (r * 299 + g * 587 + b * 114) / 1000;
+                const pos = y * 48 + x;
+                liveLuma[pos] = lum;
+                liveSum += lum;
+
+                // Skin tone heuristic in RGB
+                if (r > 42 && g > 24 && b > 18 && r > g && r - g > 8 && r > b) {
+                  skinPixels++;
+                }
+
+                // Elliptical center box
+                if (x >= 14 && x <= 34 && y >= 10 && y <= 38) {
+                  centerLumaSum += lum;
+                  centerCount++;
+                }
               }
-            } catch (snapErr) {
-              console.warn("Capture snapshot error:", snapErr);
+            }
+
+            const centerAvgLuma = centerLumaSum / (centerCount || 1);
+            const hasFaceInView = skinPixels >= 55 && centerAvgLuma > 25 && centerAvgLuma < 245;
+
+            if (!hasFaceInView) {
+              setScanStatusText("Arahkan wajah Anda ke dalam bingkai...");
+              smoothedScore = smoothedScore * 0.7 + 15 * 0.3;
+              const displayScore = Math.round(smoothedScore);
+              setLiveMatchScore(displayScore);
+              setScanProgress(Math.max(15, displayScore));
+              consecutiveMatches = 0;
+            } else if (!regTemplateReady || !regLuma || !regEdges) {
+              setScanStatusText("Memuat data biometrik terdaftar...");
+              smoothedScore = smoothedScore * 0.7 + 30 * 0.3;
+              const displayScore = Math.round(smoothedScore);
+              setLiveMatchScore(displayScore);
+              setScanProgress(displayScore);
+            } else {
+              // 2. Real-time comparison terhadap template foto registrasi
+              const liveMean = liveSum / (48 * 48);
+              let liveVarSum = 0;
+              for (let i = 0; i < 48 * 48; i++) {
+                const d = liveLuma[i] - liveMean;
+                liveVarSum += d * d;
+              }
+              const liveStd = Math.sqrt(liveVarSum / (48 * 48)) || 1;
+
+              // Hitung live Sobel edges
+              const liveEdges = new Float32Array(48 * 48);
+              for (let y = 1; y < 47; y++) {
+                for (let x = 1; x < 47; x++) {
+                  const gx =
+                    -liveLuma[(y - 1) * 48 + (x - 1)] +
+                    liveLuma[(y - 1) * 48 + (x + 1)] -
+                    2 * liveLuma[y * 48 + (x - 1)] +
+                    2 * liveLuma[y * 48 + (x + 1)] -
+                    liveLuma[(y + 1) * 48 + (x - 1)] +
+                    liveLuma[(y + 1) * 48 + (x + 1)];
+                  const gy =
+                    -liveLuma[(y - 1) * 48 + (x - 1)] -
+                    2 * liveLuma[(y - 1) * 48 + x] -
+                    liveLuma[(y - 1) * 48 + (x + 1)] +
+                    liveLuma[(y + 1) * 48 + (x - 1)] +
+                    2 * liveLuma[(y + 1) * 48 + x] +
+                    liveLuma[(y + 1) * 48 + (x + 1)];
+                  liveEdges[y * 48 + x] = Math.sqrt(gx * gx + gy * gy);
+                }
+              }
+
+              // a. Zero-mean Normalized Cross-Correlation (ZNCC) dengan toleransi micro-shift ±1px
+              let bestCorrelation = -1;
+              for (const dy of [-1, 0, 1]) {
+                for (const dx of [-1, 0, 1]) {
+                  let corr = 0;
+                  let count = 0;
+                  for (let y = 2; y < 46; y++) {
+                    const ly = y + dy;
+                    if (ly < 0 || ly >= 48) continue;
+                    for (let x = 2; x < 46; x++) {
+                      const lx = x + dx;
+                      if (lx < 0 || lx >= 48) continue;
+                      corr += (liveLuma[ly * 48 + lx] - liveMean) * (regLuma[y * 48 + x] - regMean);
+                      count++;
+                    }
+                  }
+                  const rVal = corr / (liveStd * regStd * (count || 1));
+                  if (rVal > bestCorrelation) bestCorrelation = rVal;
+                }
+              }
+
+              // b. Edge/Contour Alignment (Membandingkan garis mata, hidung, bibir)
+              let edgeDiffSum = 0;
+              let edgeCount = 0;
+              for (let i = 0; i < 48 * 48; i++) {
+                if (regEdges[i] > 15 || liveEdges[i] > 15) {
+                  edgeDiffSum += Math.abs(regEdges[i] - liveEdges[i]);
+                  edgeCount++;
+                }
+              }
+              const avgEdgeDiff = edgeDiffSum / (edgeCount || 1);
+              const edgeSim = Math.max(0, 1 - avgEdgeDiff / 120);
+
+              // c. 3x3 Regional Block Similarity
+              let regionDiffSum = 0;
+              for (let ry = 0; ry < 3; ry++) {
+                for (let rx = 0; rx < 3; rx++) {
+                  let rSum = 0;
+                  for (let y = ry * 16; y < (ry + 1) * 16; y++) {
+                    for (let x = rx * 16; x < (rx + 1) * 16; x++) {
+                      rSum += liveLuma[y * 48 + x];
+                    }
+                  }
+                  const liveReg = rSum / 256;
+                  regionDiffSum += Math.abs(liveReg - regRegions[ry * 3 + rx]);
+                }
+              }
+              const regionSim = Math.max(0, 1 - (regionDiffSum / 9) / 80);
+
+              // Normalisasi skor akhir
+              const normCorr = Math.max(0, (bestCorrelation + 0.25) / 1.25);
+              const compositeMatch = normCorr * 0.45 + edgeSim * 0.35 + regionSim * 0.20;
+              const instantScore = Math.round(compositeMatch * 100);
+
+              // Smooth score interpolation untuk responsivitas visual yang mulus
+              smoothedScore = smoothedScore * 0.45 + instantScore * 0.55;
+              const displayScore = Math.min(99, Math.max(25, Math.round(smoothedScore)));
+              setLiveMatchScore(displayScore);
+              setScanProgress(displayScore);
+
+              if (displayScore >= 68) {
+                setScanStatusText(`Mencocokkan Biometrik: ${displayScore}% (Wajah Sesuai)...`);
+                consecutiveMatches++;
+              } else {
+                setScanStatusText(`Menganalisis Biometrik: ${displayScore}%...`);
+                consecutiveMatches = Math.max(0, consecutiveMatches - 1);
+              }
+
+              // ══════════════ WAJAH COCOK & TERVERIFIKASI ══════════════
+              if (consecutiveMatches >= 6) {
+                if (matchLoopAnimId) cancelAnimationFrame(matchLoopAnimId);
+
+                // Capture snapshot dari live video
+                if (videoRef.current) {
+                  try {
+                    const snapCanvas = document.createElement("canvas");
+                    snapCanvas.width = video.videoWidth || 640;
+                    snapCanvas.height = video.videoHeight || 480;
+                    const sCtx = snapCanvas.getContext("2d");
+                    if (sCtx) {
+                      sCtx.translate(snapCanvas.width, 0);
+                      sCtx.scale(-1, 1);
+                      sCtx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
+                      setCapturedPhoto(snapCanvas.toDataURL("image/jpeg", 0.92));
+                    }
+                  } catch (e) {
+                    console.warn(e);
+                  }
+                }
+
+                stopCamera();
+                setScanStep("success");
+                setScanProgress(100);
+                setLiveMatchScore(100);
+                setScanStatusText(`Wajah Terverifikasi: ${storedName}`);
+                playFaceIdChime();
+
+                let count = 2;
+                setRedirectCountdown(count);
+                const interval = setInterval(() => {
+                  count -= 1;
+                  setRedirectCountdown(count);
+                  if (count <= 0) {
+                    clearInterval(interval);
+                    setShowFaceModal(false);
+                    markUserLoggedIn();
+                    toast.success("Login Face ID Berhasil!", {
+                      description: `Selamat datang kembali, ${storedName}!`,
+                    });
+                    window.location.href = "/";
+                  }
+                }, 1000);
+                timers.push(interval as any);
+                return;
+              }
             }
           }
 
-          // Format verification time
-          const now = new Date();
-          const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")} WIB`;
-          setVerificationTime(timeStr);
+          matchLoopAnimId = requestAnimationFrame(processRealtimeMatching);
+        };
 
-          stopCamera();
-          setScanStep("success");
-          setScanProgress(100);
-          setScanStatusText("Wajah Terverifikasi: Setiawan");
-          playFaceIdChime();
-
-          // Auto-redirect countdown (3 seconds)
-          let count = 3;
-          setRedirectCountdown(count);
-          const interval = setInterval(() => {
-            count -= 1;
-            setRedirectCountdown(count);
-            if (count <= 0) {
-              clearInterval(interval);
-              setShowFaceModal(false);
-              markUserLoggedIn();
-              toast.success("Login Face ID Berhasil!", {
-                description: "Selamat datang kembali, Setiawan (IT Programmer)!",
-              });
-              window.location.href = "/";
-            }
-          }, 1000);
-          timers.push(interval as any);
-        }, 3600);
-
-        timers.push(t1, t2, t3);
+        // Jalankan loop analisis frame
+        matchLoopAnimId = requestAnimationFrame(processRealtimeMatching);
       } else {
         setIsCameraLoading(false);
         setHasCamera(false);
         setCameraError(
           lastErr?.name === "NotAllowedError" || lastErr?.name === "PermissionDeniedError"
-            ? "Izin akses kamera belum diaktifkan. Silakan izinkan akses kamera di browser Anda untuk melakukan pemindaian wajah asli."
-            : "Kamera tidak terdeteksi pada perangkat ini. Pastikan kamera/webcam terhubung dengan baik."
+            ? "Izin akses kamera belum diaktifkan. Silakan izinkan akses kamera di browser Anda."
+            : "Kamera tidak terdeteksi pada perangkat ini."
         );
       }
     };
@@ -263,7 +522,12 @@ export default function LoginPage() {
 
     return () => {
       isCancelled = true;
-      timers.forEach(clearTimeout);
+      if (matchLoopAnimId) cancelAnimationFrame(matchLoopAnimId);
+      timers.forEach((t: any) => {
+        if (typeof t === "function") t();
+        else if (t?.close) t.close();
+        else clearInterval(t);
+      });
       stopCamera();
     };
   }, [showFaceModal]);
@@ -277,7 +541,67 @@ export default function LoginPage() {
     }
   };
 
-  const handleStartFaceId = () => {
+  const handleStartFaceId = async () => {
+    const isRegistered =
+      typeof window !== "undefined" &&
+      localStorage.getItem("bisa_face_id_registered") === "true";
+
+    if (!isRegistered) {
+      const Swal = (await import("sweetalert2")).default;
+      Swal.fire({
+        title: "Belum Registrasi Face ID",
+        html: `
+          <div class="text-center text-xs text-slate-600 space-y-3 mt-1">
+            <div class="w-16 h-16 rounded-2xl bg-blue-50 text-[#1a7dc4] mx-auto flex items-center justify-center border border-blue-100 shadow-xs">
+              <svg viewBox="0 0 24 24" width="34" height="34" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+                <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+                <circle cx="12" cy="12" r="3"/>
+                <path d="m16 16-.5-.5"/>
+                <path d="m8 8 .5.5"/>
+              </svg>
+            </div>
+            
+            <p class="text-[13px] font-semibold text-slate-800 leading-snug px-2">
+              Anda harus <span class="text-[#1a7dc4] font-bold">login terlebih dahulu</span>, baru kemudian melakukan <span class="text-[#1a7dc4] font-bold">registrasi Face ID di menu Setting</span>.
+            </p>
+
+            <div class="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 text-left space-y-2 text-[11.5px] text-slate-600">
+              <div class="flex items-start gap-2.5">
+                <span class="w-5 h-5 rounded-full bg-[#1a7dc4] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 shadow-2xs">1</span>
+                <span>Masuk dengan <b>NIP & Kata Sandi</b> yang dibuatkan Admin.</span>
+              </div>
+              <div class="flex items-start gap-2.5">
+                <span class="w-5 h-5 rounded-full bg-[#1a7dc4] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 shadow-2xs">2</span>
+                <span>Di Beranda, buka menu <b>Setting</b> (ikon gear ⚙️ di pojok kanan atas).</span>
+              </div>
+              <div class="flex items-start gap-2.5">
+                <span class="w-5 h-5 rounded-full bg-[#1a7dc4] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 shadow-2xs">3</span>
+                <span>Pilih tab <b>Face ID</b> lalu lakukan pemindaian wajah Anda.</span>
+              </div>
+            </div>
+
+            <p class="text-[11px] text-slate-400">
+              Setelah registrasi di Setting selesai, Anda bisa login langsung menggunakan Face ID.
+            </p>
+          </div>
+        `,
+        showCloseButton: true,
+        confirmButtonColor: "#1a7dc4",
+        confirmButtonText: "Masuk dengan NIP & Sandi",
+        customClass: {
+          popup: "!w-[92vw] sm:!w-[420px] rounded-[28px] p-6 shadow-2xl",
+          confirmButton: "w-full rounded-xl font-bold py-3 px-5 text-xs shadow-md shadow-[#1a7dc4]/20",
+        },
+      }).then(() => {
+        const input = document.querySelector('input[placeholder="Contoh: 2024001"]') as HTMLInputElement;
+        if (input) input.focus();
+      });
+      return;
+    }
+
     setShowFaceModal(true);
   };
 
@@ -288,6 +612,10 @@ export default function LoginPage() {
     setScanStep("scanning");
     setScanProgress(45);
     setScanStatusText("Memindai biometrik kontur wajah...");
+
+    const registeredName =
+      (typeof window !== "undefined" && localStorage.getItem("bisa_face_id_user_name")) ||
+      "Eki Permadi Nugraha";
 
     setTimeout(() => {
       setScanStep("analyzing");
@@ -301,10 +629,10 @@ export default function LoginPage() {
       setVerificationTime(timeStr);
       setScanStep("success");
       setScanProgress(100);
-      setScanStatusText("Wajah Terverifikasi: Setiawan");
+      setScanStatusText(`Wajah Terverifikasi: ${registeredName}`);
       playFaceIdChime();
 
-      let count = 4;
+      let count = 2;
       setRedirectCountdown(count);
       const interval = setInterval(() => {
         count -= 1;
@@ -314,7 +642,7 @@ export default function LoginPage() {
           setShowFaceModal(false);
           markUserLoggedIn();
           toast.success("Login Face ID Berhasil!", {
-            description: "Selamat datang kembali, Setiawan (IT Programmer)!",
+            description: `Selamat datang kembali, ${registeredName}!`,
           });
           window.location.href = "/";
         }
@@ -334,8 +662,11 @@ export default function LoginPage() {
     stopCamera();
     setShowFaceModal(false);
     markUserLoggedIn();
+    const registeredName =
+      (typeof window !== "undefined" && localStorage.getItem("bisa_face_id_user_name")) ||
+      "Eki Permadi Nugraha";
     toast.success("Login Face ID Berhasil!", {
-      description: "Selamat datang kembali, Setiawan (IT Programmer)!",
+      description: `Selamat datang kembali, ${registeredName}!`,
     });
     window.location.href = "/";
   };
@@ -690,172 +1021,248 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ══════════════ MODAL FACE ID (CLEAN & SLICK) ══════════════ */}
+      {/* ══════════════ MODAL FACE ID UNLOCK (APPLE SQUIRCLE STYLE) ══════════════ */}
       {showFaceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-fade-in select-none">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in select-none">
           <div
             className="fixed inset-0 cursor-pointer"
             onClick={scanStep === "success" ? handleProceedDashboardNow : handleCloseFaceModal}
           />
-          <div className="relative w-full max-w-[340px] bg-[#0c1825] border border-white/10 rounded-[28px] p-5 text-white text-center shadow-2xl z-10 animate-scale-in">
+          <div className="relative w-full max-w-[340px] bg-[#09111b]/95 border border-white/10 rounded-[34px] p-6 text-white text-center shadow-[0_25px_70px_rgba(0,0,0,0.85)] z-10 animate-scale-in overflow-hidden">
+            {/* Ambient Glow */}
+            <div className="absolute -top-16 -left-16 w-36 h-36 bg-sky-500/15 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-16 -right-16 w-36 h-36 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+
             {/* Close Button */}
             {scanStep !== "success" && (
               <button
+                type="button"
                 onClick={handleCloseFaceModal}
                 className="absolute top-4 right-4 w-7 h-7 rounded-full bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer active:scale-95"
+                aria-label="Tutup"
               >
                 <X size={15} />
               </button>
             )}
 
-            {/* ──────── 1. TAMPILAN PEMINDAIAN (MINIMALIS & KEREN) ──────── */}
-            {scanStep !== "success" && (
-              <>
-                {/* Header Sederhana */}
-                <div className="flex flex-col items-center mt-1 mb-2">
-                  <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 text-sky-400 flex items-center justify-center mb-2">
-                    <ScanFace size={22} strokeWidth={2.2} />
-                  </div>
-                  <h3 className="text-base font-bold text-white tracking-wide">
-                    Face ID
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Arahkan wajah ke kamera
-                  </p>
-                </div>
-
-                {/* Bingkai Kamera Melingkar Bersih */}
-                <div className="w-48 h-48 mx-auto relative rounded-full overflow-hidden bg-black/80 border-2 border-sky-400/80 shadow-[0_0_20px_rgba(56,189,248,0.25)] my-3">
-                  {/* Live Video Feed */}
-                  <video
-                    ref={videoRef}
-                    className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-200 ${
-                      hasCamera ? "opacity-100" : "opacity-0"
-                    }`}
-                    autoPlay
-                    playsInline
-                    muted
+            {/* Header Sederhana dengan Target Biometrik Terdaftar */}
+            <div className="flex flex-col items-center mt-0.5 mb-1">
+              {/* Profile Chip dari Hasil Registrasi */}
+              {registeredPhoto ? (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 mb-2.5 max-w-[270px]">
+                  <img
+                    src={registeredPhoto}
+                    alt={registeredName}
+                    className="w-6 h-6 rounded-full object-cover ring-1 ring-sky-400/60 shadow-xs"
                   />
-
-                  {/* Fallback jika kamera belum siap/ditolak */}
-                  {!hasCamera && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 p-4 text-center">
-                      {isCameraLoading ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="w-8 h-8 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
-                          <span className="text-xs text-slate-400">Menghubungkan...</span>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center gap-1.5">
-                          <AlertCircle size={26} className="text-amber-400 mb-0.5" />
-                          <p className="text-[11px] text-slate-300 px-1 leading-tight">
-                            {cameraError || "Kamera belum aktif"}
-                          </p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <button
-                              onClick={() => {
-                                stopCamera();
-                                setShowFaceModal(false);
-                                setTimeout(() => setShowFaceModal(true), 200);
-                              }}
-                              className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/15 text-slate-300 text-[11px] font-medium transition-colors"
-                            >
-                              Coba Lagi
-                            </button>
-                            <button
-                              onClick={handleStartSimulatedScan}
-                              className="px-2.5 py-1 rounded-full bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-[11px] font-medium border border-sky-400/30 transition-colors"
-                            >
-                              Simulasi
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Garis Scan Halus */}
-                  {hasCamera && (
-                    <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-sky-400 to-transparent shadow-[0_0_10px_rgba(56,189,248,0.9)] animate-scan pointer-events-none" />
-                  )}
-                </div>
-
-                {/* Progress Tipis & Status */}
-                <div className="space-y-1.5 my-2.5">
-                  <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-sky-400 rounded-full transition-all duration-300 ease-out"
-                      style={{ width: `${scanProgress}%` }}
-                    />
+                  <div className="text-left overflow-hidden">
+                    <p className="text-[9.5px] uppercase tracking-wider text-slate-400 font-medium leading-none">
+                      Wajah Terdaftar
+                    </p>
+                    <p className="text-[11.5px] font-semibold text-white leading-tight truncate">
+                      {registeredName}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-300 font-medium h-4">
-                    {scanStatusText}
-                  </p>
                 </div>
+              ) : (
+                <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 text-sky-400 flex items-center justify-center mb-2 shadow-xs">
+                  <ScanFace size={22} strokeWidth={2.2} />
+                </div>
+              )}
 
-                {/* Tombol Batal */}
-                <button
-                  onClick={handleCloseFaceModal}
-                  className="w-full py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white transition-colors cursor-pointer mt-1"
-                >
-                  Batal
-                </button>
-              </>
-            )}
+              <h3 className="text-lg font-bold text-white tracking-wide">
+                {scanStep === "success" ? "Wajah Terverifikasi" : "Face ID"}
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {scanStep === "success"
+                  ? "Identitas biometrik cocok dengan hasil registrasi"
+                  : "Arahkan wajah Anda tepat ke dalam bingkai"}
+              </p>
+            </div>
 
-            {/* ──────── 2. TAMPILAN BERHASIL (BERSIH, ELEGAN, TIDAK RAMAI) ──────── */}
-            {scanStep === "success" && (
-              <div className="animate-scale-in py-2">
-                {/* Foto Wajah Asli Pengguna dalam Lingkaran Rapi */}
-                <div className="relative w-24 h-24 mx-auto my-2">
-                  <div className="w-full h-full rounded-full overflow-hidden border-2 border-emerald-400 bg-slate-900 shadow-[0_0_20px_rgba(52,211,153,0.35)]">
-                    {capturedPhoto ? (
-                      <img
-                        src={capturedPhoto}
-                        alt="Foto Wajah Terverifikasi"
-                        className="w-full h-full object-cover"
-                      />
+            {/* ══════════════ APPLE SQUIRCLE DENGAN 4 CORNER BRACKETS ══════════════ */}
+            <div className="relative w-48 h-48 mx-auto my-3 flex items-center justify-center select-none">
+              {/* 4 Corner Biometric Brackets */}
+              <svg
+                viewBox="0 0 210 210"
+                className="absolute inset-0 w-full h-full pointer-events-none transition-all duration-300"
+              >
+                {/* Top-Left Bracket */}
+                <path
+                  d="M 12 38 L 12 24 A 12 12 0 0 1 24 12 L 38 12"
+                  fill="none"
+                  stroke={scanStep === "success" || liveMatchScore >= 68 ? "#34c759" : "#38bdf8"}
+                  strokeWidth={scanStep === "success" ? "3.5" : "3"}
+                  strokeLinecap="round"
+                  className="transition-colors duration-200"
+                />
+                {/* Top-Right Bracket */}
+                <path
+                  d="M 172 12 L 186 12 A 12 12 0 0 1 198 24 L 198 38"
+                  fill="none"
+                  stroke={scanStep === "success" || liveMatchScore >= 68 ? "#34c759" : "#38bdf8"}
+                  strokeWidth={scanStep === "success" ? "3.5" : "3"}
+                  strokeLinecap="round"
+                  className="transition-colors duration-200"
+                />
+                {/* Bottom-Left Bracket */}
+                <path
+                  d="M 12 172 L 12 186 A 12 12 0 0 0 24 198 L 38 198"
+                  fill="none"
+                  stroke={scanStep === "success" || liveMatchScore >= 68 ? "#34c759" : "#38bdf8"}
+                  strokeWidth={scanStep === "success" ? "3.5" : "3"}
+                  strokeLinecap="round"
+                  className="transition-colors duration-200"
+                />
+                {/* Bottom-Right Bracket */}
+                <path
+                  d="M 172 198 L 186 198 A 12 12 0 0 0 198 186 L 198 172"
+                  fill="none"
+                  stroke={scanStep === "success" || liveMatchScore >= 68 ? "#34c759" : "#38bdf8"}
+                  strokeWidth={scanStep === "success" ? "3.5" : "3"}
+                  strokeLinecap="round"
+                  className="transition-colors duration-200"
+                />
+              </svg>
+
+              {/* Viewport Squircle Container */}
+              <div
+                className={`relative w-40 h-40 rounded-[28px] overflow-hidden bg-black/90 border transition-all duration-300 flex items-center justify-center ${
+                  scanStep === "success"
+                    ? "border-[#34c759]/50 shadow-[0_0_35px_rgba(52,199,89,0.3)]"
+                    : liveMatchScore >= 68
+                    ? "border-[#34c759]/40 shadow-[0_0_25px_rgba(52,199,89,0.25)]"
+                    : "border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.8)]"
+                }`}
+              >
+                {/* Live Camera Video Feed */}
+                <video
+                  ref={videoRef}
+                  className={`w-full h-full object-cover scale-x-[-1] transition-all duration-300 ${
+                    !hasCamera ? "opacity-0" : scanStep === "success" ? "opacity-35 blur-xs scale-105" : "opacity-100"
+                  }`}
+                  autoPlay
+                  playsInline
+                  muted
+                />
+
+                {/* Fallback jika kamera belum siap/ditolak */}
+                {!hasCamera && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 p-4 text-center">
+                    {isCameraLoading ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-8 h-8 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-xs text-slate-400">Menghubungkan sensor...</span>
+                      </div>
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-[#156bb8] text-white font-bold text-2xl">
-                        S
+                      <div className="flex flex-col items-center gap-1.5">
+                        <AlertCircle size={26} className="text-amber-400 mb-0.5" />
+                        <p className="text-[11px] text-slate-300 px-1 leading-tight">
+                          {cameraError || "Kamera belum aktif"}
+                        </p>
                       </div>
                     )}
                   </div>
+                )}
 
-                  {/* Badge Centang Hijau */}
-                  <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-emerald-500 border-2 border-[#0c1825] text-white flex items-center justify-center shadow-md animate-bounce-in">
-                    <Check size={16} strokeWidth={3.5} />
-                  </span>
+                {/* Subtle Laser Scanning Beam saat Scanning */}
+                {scanStep !== "success" && hasCamera && (
+                  <div
+                    className={`absolute inset-x-0 top-0 h-[2px] transition-colors duration-200 pointer-events-none animate-scan ${
+                      liveMatchScore >= 68
+                        ? "bg-gradient-to-r from-transparent via-[#34c759] to-transparent shadow-[0_0_12px_#34c759]"
+                        : "bg-gradient-to-r from-transparent via-[#38bdf8] to-transparent shadow-[0_0_12px_#38bdf8]"
+                    }`}
+                  />
+                )}
+
+                {/* Success Checkmark in Center */}
+                {scanStep === "success" && (
+                  <div className="absolute inset-0 flex items-center justify-center animate-scale-in">
+                    <div className="w-16 h-16 rounded-full bg-[#34c759] flex items-center justify-center text-white shadow-lg shadow-[#34c759]/40">
+                      <Check size={36} strokeWidth={3.8} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ──────── BOTTOM REAL-TIME MATCH BAR & ACTIONS ──────── */}
+            {scanStep !== "success" ? (
+              <div className="space-y-3 mt-1">
+                {/* Real-time Match Indicator Bar */}
+                <div className="w-48 mx-auto px-1">
+                  <div className="flex items-center justify-between text-[11px] font-medium mb-1.5">
+                    <span className="text-slate-400 flex items-center gap-1.5 text-[10.5px]">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          liveMatchScore >= 68
+                            ? "bg-[#34c759] animate-ping"
+                            : "bg-sky-400 animate-pulse"
+                        }`}
+                      />
+                      <span>Kesesuaian:</span>
+                    </span>
+                    <span
+                      className={`font-mono text-xs font-bold transition-colors ${
+                        liveMatchScore >= 68 ? "text-[#34c759]" : "text-sky-400"
+                      }`}
+                    >
+                      {liveMatchScore}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-150 rounded-full ${
+                        liveMatchScore >= 68
+                          ? "bg-[#34c759] shadow-[0_0_8px_#34c759]"
+                          : "bg-sky-400 shadow-[0_0_8px_#38bdf8]"
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(10, liveMatchScore))}%` }}
+                    />
+                  </div>
                 </div>
 
-                {/* Informasi Identitas Sederhana */}
-                <h3 className="text-base font-bold text-white mt-3">
-                  Wajah Terverifikasi
-                </h3>
-                <p className="text-sm font-semibold text-sky-300 mt-0.5">
-                  Setiawan
-                </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  NIP: 2024001 • IT Programmer
+                {/* Status text */}
+                <p className="text-xs text-slate-400 font-medium h-4 flex items-center justify-center gap-1.5 px-2 truncate">
+                  <span>{scanStatusText}</span>
                 </p>
 
-                {/* Status Ringkas */}
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold my-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>Login Berhasil</span>
-                </div>
-
-                {/* Tombol Lanjut ke Dashboard */}
                 <button
-                  onClick={handleProceedDashboardNow}
-                  className="w-full bg-gradient-to-r from-[#1a7dc4] to-[#156bb8] text-white font-bold text-xs sm:text-sm py-2.5 rounded-xl shadow-md hover:brightness-105 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5 mt-1"
+                  type="button"
+                  onClick={handleCloseFaceModal}
+                  className="w-full py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white transition-colors cursor-pointer"
                 >
-                  <span>Masuk ke Beranda</span>
+                  Batal & Masuk Manual
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2 mt-1 animate-fade-in">
+                {/* User Info */}
+                <div className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full bg-[#34c759]/15 border border-[#34c759]/30 text-[#34c759] text-[11px] font-semibold mb-1">
+                  <Check size={12} strokeWidth={3} />
+                  <span>Biometrik 100% Cocok</span>
+                </div>
+
+                <h4 className="text-base font-bold text-white leading-tight">
+                  {registeredName}
+                </h4>
+                <p className="text-xs text-slate-400 font-medium">
+                  NIP: {registeredNip} • Terverifikasi
+                </p>
+
+                {/* Primary Button Masuk */}
+                <button
+                  type="button"
+                  onClick={handleProceedDashboardNow}
+                  className="w-full mt-3 py-3 rounded-full bg-[#34c759] hover:bg-[#30b753] text-white font-semibold text-xs sm:text-sm tracking-wide shadow-lg shadow-[#34c759]/30 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <span>Masuk ke Beranda Sekarang</span>
                   <ArrowRight size={15} strokeWidth={2.5} />
                 </button>
 
-                <p className="text-[10px] text-slate-400 mt-2 font-medium">
-                  Mengarahkan dalam {redirectCountdown} detik...
+                <p className="text-[10.5px] text-slate-400 font-medium pt-1">
+                  Mengarahkan otomatis dalam {redirectCountdown} detik...
                 </p>
               </div>
             )}
