@@ -606,24 +606,13 @@ export default function ProfileSettingsModal({
                 /* ── SUDAH TERDAFTAR (AKTIF) ── */
                 <div className="space-y-3">
                   <div className="p-4 rounded-2xl bg-gradient-to-b from-emerald-50/70 via-slate-50 to-white border border-emerald-200 flex flex-col items-center text-center">
-                    {/* Registered Face Photo Preview */}
-                    <div className="relative mb-3">
-                      <div className="w-20 h-20 rounded-full bg-white border-2 border-emerald-500 shadow-md flex items-center justify-center overflow-hidden">
-                        {facePhoto ? (
-                          <img
-                            src={facePhoto}
-                            alt="Wajah Terdaftar"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                            <ScanFace size={36} />
-                          </div>
-                        )}
+                    {/* Registered Face ID Success Indicator (Ceklis Penanda Registrasi Berhasil) */}
+                    <div className="relative mb-3 flex items-center justify-center">
+                      <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-100 flex items-center justify-center shadow-xs">
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/25">
+                          <Check size={32} strokeWidth={3.5} className="text-white drop-shadow-xs" />
+                        </div>
                       </div>
-                      <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 border-2 border-white text-white flex items-center justify-center shadow-xs">
-                        <Check size={13} strokeWidth={3.5} />
-                      </span>
                     </div>
 
                     {/* Status Chip */}
