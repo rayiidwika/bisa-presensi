@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
@@ -17,6 +17,7 @@ import {
   History,
   UserX,
   AlarmClock,
+  Briefcase,
   MessageSquare,
   Settings,
   Calendar,
@@ -25,13 +26,22 @@ import {
   Eye,
   FileText,
   ExternalLink,
+  Download,
 } from "lucide-react";
 import Swal from "sweetalert2";
+import { toast } from "sonner";
 import { getUnreadCount, showNotificationPopup } from "@/lib/notifications";
 import { getUserProfile, UserProfile } from "@/lib/userProfile";
 import { mockLeaveRequests } from "@/lib/mockData";
 import { LeaveRequest } from "@/types";
 import { formatDate } from "@/lib/utils";
+import SlipGajiModal, {
+  SlipGajiPaper,
+  exportSlipElementToPNG,
+  SlipGajiData,
+  getDefaultSlipData,
+  terbilangRupiah,
+} from "@/components/salary/SlipGajiModal";
 
 const ALL_MONTHS = [
   "Januari",
@@ -64,18 +74,39 @@ export default function HomePage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isPreviewAvatarOpen, setIsPreviewAvatarOpen] = useState<boolean>(false);
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
-  const [selectedMonth, setSelectedMonth] = useState<number>(8); // September (0-indexed)
+  const [selectedMonth, setSelectedMonth] = useState<number>(9); // 9 = Oktober (0-indexed)
   const [selectedYear, setSelectedYear] = useState<number>(2026);
 
-  // Riwayat Sakit, Izin, Cuti Popup State
-  const [selectedHistoryType, setSelectedHistoryType] = useState<"sakit" | "izin" | "cuti" | null>(null);
+  // Riwayat Sakit, Izin, Cuti, Dinas Popup State
+  const [selectedHistoryType, setSelectedHistoryType] = useState<"sakit" | "izin" | "cuti" | "dinas" | null>(null);
   const [previewDocModal, setPreviewDocModal] = useState<LeaveRequest | null>(null);
   const [leaveRequestsList, setLeaveRequestsList] = useState<LeaveRequest[]>([]);
 
+  // Slip Gaji & Download States
+  const [isSlipModalOpen, setIsSlipModalOpen] = useState<boolean>(false);
+  const hiddenSlipRef = useRef<HTMLDivElement | null>(null);
+
+  const handleDirectDownloadPNG = async () => {
+    if (!hiddenSlipRef.current) return;
+    const toastId = toast.loading("Membuat file gambar slip gaji...");
+    try {
+      const activePeriode = currentMonthYear || "Oktober 2026";
+      const employeeName = userProfile.name || "Eki Permadi Nugraha";
+      await exportSlipElementToPNG(
+        hiddenSlipRef.current,
+        `Slip_Gaji_${employeeName.replace(/\s+/g, "_")}_${activePeriode.replace(/\s+/g, "_")}.png`
+      );
+      toast.success("Slip gaji berhasil diunduh sebagai gambar!", { id: toastId });
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal membuat gambar slip gaji.", { id: toastId });
+    }
+  };
+
   // Realtime Dates & Clock State
-  const [todayCardDate, setTodayCardDate] = useState<string>("Rabu , 30 Sep 2026");
-  const [todayRekapDate, setTodayRekapDate] = useState<string>("Rab, 30 September");
-  const [currentMonthYear, setCurrentMonthYear] = useState<string>("September 2026");
+  const [todayCardDate, setTodayCardDate] = useState<string>("Rabu , 21 Okt 2026");
+  const [todayRekapDate, setTodayRekapDate] = useState<string>("Rab, 21 Oktober");
+  const [currentMonthYear, setCurrentMonthYear] = useState<string>("Oktober 2026");
   const [realtimeClock, setRealtimeClock] = useState<string>("");
   const [pastRekapDays, setPastRekapDays] = useState<{ day: string; shift: string; time: string }[]>([
     { day: "Sel, 29 September", shift: "Reguler", time: "07:59 - 17:02" },
@@ -437,20 +468,164 @@ export default function HomePage() {
     return `${formatDate(item.startDate)} - ${formatDate(item.endDate)}`;
   };
 
-  const sakitItems = leaveRequestsList.filter((r) => r.type === "sakit");
-  const izinItems = leaveRequestsList.filter((r) => r.type === "izin");
-  const cutiItems = leaveRequestsList.filter((r) => r.type === "cuti");
+  // ══════════════ HELPER KALKULASI DATA PER BULAN & TAHUN ══════════════
+  const getWorkingDaysInMonth = (year: number, monthIndex: number): number => {
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    let workDays = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = new Date(year, monthIndex, day);
+      if (d.getDay() !== 0) { // Hari Minggu libur
+        workDays++;
+      }
+    }
+    return workDays;
+  };
+
+  const getMonthlySummaryData = (year: number, monthIndex: number) => {
+    const totalWorkDays = getWorkingDaysInMonth(year, monthIndex);
+    const key = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+
+    if (key === "2026-10") {
+      return {
+        hadirCount: 4,
+        totalWorkDays: 26,
+        hadirHours: "31 Jam 59 Menit",
+        lemburDays: 3,
+        lemburHours: "8 Jam 59 Menit",
+        terlambatText: "- 15 Menit",
+        tepatWaktuDays: 4,
+        takeHomePay: 790047,
+      };
+    }
+    if (key === "2026-09") {
+      return {
+        hadirCount: 22,
+        totalWorkDays: 26,
+        hadirHours: "174 Jam 20 Menit",
+        lemburDays: 4,
+        lemburHours: "12 Jam 30 Menit",
+        terlambatText: "- 25 Menit",
+        tepatWaktuDays: 21,
+        takeHomePay: 850000,
+      };
+    }
+    if (key === "2026-08") {
+      return {
+        hadirCount: 24,
+        totalWorkDays: 26,
+        hadirHours: "188 Jam 45 Menit",
+        lemburDays: 5,
+        lemburHours: "15 Jam 10 Menit",
+        terlambatText: "- 10 Menit",
+        tepatWaktuDays: 23,
+        takeHomePay: 820000,
+      };
+    }
+    if (key === "2026-07") {
+      return {
+        hadirCount: 25,
+        totalWorkDays: 27,
+        hadirHours: "196 Jam 15 Menit",
+        lemburDays: 3,
+        lemburHours: "9 Jam 00 Menit",
+        terlambatText: "- 0 Menit",
+        tepatWaktuDays: 25,
+        takeHomePay: 890000,
+      };
+    }
+
+    // Untuk bulan-bulan dinamis lainnya:
+    const seed = Math.abs((year * 12 + monthIndex) % 7);
+    const hadir = Math.max(1, totalWorkDays - 2 - (seed % 3));
+    const lembur = (seed % 4) + 1;
+    const terlambatMins = ((seed * 5) % 25) + 5;
+    const tepat = Math.max(1, hadir - (seed % 2));
+    const totalJam = hadir * 8 - (seed % 5);
+    const totalMenit = ((seed * 17) % 50) + 10;
+    const lemburJam = lembur * 3 - (seed % 3);
+
+    return {
+      hadirCount: hadir,
+      totalWorkDays,
+      hadirHours: `${totalJam} Jam ${totalMenit} Menit`,
+      lemburDays: lembur,
+      lemburHours: `${lemburJam} Jam 00 Menit`,
+      terlambatText: `- ${terlambatMins} Menit`,
+      tepatWaktuDays: tepat,
+      takeHomePay: 790047 + (seed % 5) * 15000,
+    };
+  };
+
+  // Filter Leave Requests (Sakit, Izin, Cuti, Perjalanan Dinas) Sesuai Bulan & Tahun yang Dipilih
+  const selectedMonthStr = String(selectedMonth + 1).padStart(2, "0");
+  const selectedMonthPrefix = `${selectedYear}-${selectedMonthStr}`;
+
+  const monthlyLeaveRequests = leaveRequestsList.filter((r) => {
+    if (!r.startDate) return false;
+    const startMatch = r.startDate.startsWith(selectedMonthPrefix);
+    const endMatch = r.endDate ? r.endDate.startsWith(selectedMonthPrefix) : false;
+    return startMatch || endMatch;
+  });
+
+  const sakitItems = monthlyLeaveRequests.filter((r) => r.type === "sakit");
+  const izinItems = monthlyLeaveRequests.filter((r) => r.type === "izin");
+  const cutiItems = monthlyLeaveRequests.filter((r) => r.type === "cuti");
+  const dinasItems = monthlyLeaveRequests.filter((r) => r.type === "dinas");
 
   const sakitCount = sakitItems.reduce((acc, curr) => acc + (curr.totalDays || 1), 0);
   const izinCount = izinItems.reduce((acc, curr) => acc + (curr.totalDays || 1), 0);
   const cutiCount = cutiItems.reduce((acc, curr) => acc + (curr.totalDays || 1), 0);
+  const dinasCount = dinasItems.reduce((acc, curr) => acc + (curr.totalDays || 1), 0);
 
   const currentHistoryList = selectedHistoryType
-    ? leaveRequestsList.filter((r) => r.type === selectedHistoryType)
+    ? monthlyLeaveRequests.filter((r) => r.type === selectedHistoryType)
     : [];
 
+  const monthlySummary = getMonthlySummaryData(selectedYear, selectedMonth);
+
+  const currentSlipData: SlipGajiData = {
+    ...getDefaultSlipData(),
+    periode: currentMonthYear,
+    penerimaan: [
+      { no: 1, nama: "Gaji Pokok", jumlah: 1723264 },
+      { no: 2, nama: "Tunjangan Jabatan", jumlah: 500000 },
+      { no: 3, nama: "Tunjangan Transportasi", jumlah: 250000 },
+      { no: 4, nama: "Tunjangan Komunikasi", jumlah: 250000 },
+      { no: 5, nama: "Lembur", jumlah: monthlySummary.lemburDays * 127000 },
+      { no: 6, nama: "WFH", jumlah: 0 },
+      { no: 7, nama: "Bonus", jumlah: 0 },
+      { no: 8, nama: "Perjalanan Dinas", jumlah: dinasCount * 133333 },
+      { no: 9, nama: "Penerimaan lainnya", jumlah: 0 },
+      { no: 10, nama: "Reimburse", jumlah: 0 },
+    ],
+    pengurangan: [
+      { no: 1, nama: "Keterlambatan", jumlah: 85050 },
+      {
+        no: 2,
+        nama: "Pinjaman",
+        jumlah: Math.max(
+          0,
+          1723264 +
+            500000 +
+            250000 +
+            250000 +
+            monthlySummary.lemburDays * 127000 +
+            dinasCount * 133333 -
+            85050 -
+            monthlySummary.takeHomePay
+        ),
+      },
+      { no: 3, nama: "Iuran BPJS Kesehatan", jumlah: 0 },
+      { no: 4, nama: "Iuran BPJS Ketenagakerjaan", jumlah: 0 },
+      { no: 5, nama: "Pajak", jumlah: 0 },
+      { no: 6, nama: "Livet", jumlah: 0 },
+      { no: 7, nama: "Pengurangan Lainnya", jumlah: 0 },
+    ],
+    terbilang: terbilangRupiah(monthlySummary.takeHomePay),
+  };
+
   return (
-    <div className="min-h-screen bg-[#ddeef8] pb-24">
+    <div className="min-h-screen bg-[#ddeef8] pb-36">
       {/* ══════════════ BLUE GRADIENT HEADER WITH WATERMARK ══════════════ */}
       <div className="bg-gradient-to-b from-[#2a8ee4] via-[#1f7cd0] to-[#156bb8] pt-4 pb-6 px-4 sm:px-6 md:px-8 relative overflow-hidden rounded-b-[32px] sm:rounded-b-[40px] shadow-sm">
         {/* Watermark Logo Bisa Media Putih Blur di ujung kanan */}
@@ -711,11 +886,11 @@ export default function HomePage() {
                 Hadir
               </h4>
               <p className="text-[11px] sm:text-[11.5px] text-slate-400 font-medium italic mt-0.5 whitespace-nowrap">
-                4 Hari / 26 Hari
+                {monthlySummary.hadirCount} Hari / {monthlySummary.totalWorkDays} Hari
               </p>
               <p className="text-[10px] sm:text-[10.5px] text-[#1f6db8] font-bold italic mt-0.5 whitespace-nowrap flex items-center gap-1">
                 <Clock size={11} className="shrink-0 text-[#1f6db8]" strokeWidth={2.6} />
-                <span className="font-time font-bold">31 Jam 59 Menit</span>
+                <span className="font-time font-bold">{monthlySummary.hadirHours}</span>
               </p>
             </div>
           </div>
@@ -730,11 +905,11 @@ export default function HomePage() {
                 Lembur
               </h4>
               <p className="text-[11px] sm:text-[11.5px] text-slate-400 font-medium italic mt-0.5 whitespace-nowrap">
-                3 Hari
+                {monthlySummary.lemburDays} Hari
               </p>
               <p className="text-[10px] sm:text-[10.5px] text-[#1f6db8] font-bold italic mt-0.5 whitespace-nowrap flex items-center gap-1">
                 <Clock size={11} className="shrink-0 text-[#1f6db8]" strokeWidth={2.6} />
-                <span className="font-time font-bold">8 Jam 59 Menit</span>
+                <span className="font-time font-bold">{monthlySummary.lemburHours}</span>
               </p>
             </div>
           </div>
@@ -806,25 +981,29 @@ export default function HomePage() {
                 Terlambat
               </h4>
               <p className="font-time text-[11px] sm:text-[11.5px] text-rose-600 font-bold italic mt-0.5 whitespace-nowrap">
-                - 15 Menit
+                {monthlySummary.terlambatText}
               </p>
             </div>
           </div>
 
-          {/* 7. Tidak Lengkap */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3 sm:p-3.5 flex items-center gap-3 sm:gap-3.5 hover:border-blue-300 hover:shadow-xs transition-all group">
+          {/* 7. Perjalanan Dinas (Menggantikan Tidak Lengkap) */}
+          <button
+            type="button"
+            onClick={() => setSelectedHistoryType("dinas")}
+            className="w-full text-left bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3 sm:p-3.5 flex items-center gap-3 sm:gap-3.5 hover:border-blue-300 hover:shadow-xs transition-all group cursor-pointer active:scale-[0.98]"
+          >
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-              <UserX size={23} className="text-slate-800" strokeWidth={2.2} />
+              <Briefcase size={23} className="text-slate-800" strokeWidth={2.2} />
             </div>
             <div className="min-w-0">
               <h4 className="text-[15px] sm:text-[16px] font-bold italic text-[#1f6db8] leading-tight">
-                Tidak Lengkap
+                Perjalanan Dinas
               </h4>
               <p className="text-[11px] sm:text-[11.5px] text-slate-400 font-medium italic mt-0.5">
-                0 Hari
+                {dinasCount} Hari
               </p>
             </div>
-          </div>
+          </button>
 
           {/* 8. Tepat Waktu */}
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3 sm:p-3.5 flex items-center gap-3 sm:gap-3.5 hover:border-blue-300 hover:shadow-xs transition-all group">
@@ -836,41 +1015,61 @@ export default function HomePage() {
                 Tepat Waktu
               </h4>
               <p className="text-[11px] sm:text-[11.5px] text-slate-400 font-medium italic mt-0.5">
-                4 Hari
+                {monthlySummary.tepatWaktuDays} Hari
               </p>
             </div>
           </div>
 
           {/* 9. Take Home Pay (Full Width) */}
-          <div className="col-span-2 bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3 sm:p-3.5 flex items-center gap-3 sm:gap-3.5 hover:border-blue-300 hover:shadow-xs transition-all group">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-              <div className="relative flex items-center justify-center">
-                <svg
-                  viewBox="0 0 24 24"
-                  width="24"
-                  height="24"
-                  stroke="currentColor"
-                  strokeWidth="2.1"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-slate-800"
-                >
-                  <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <polyline points="9 22 9 13 15 13 15 22" />
-                </svg>
-                <span className="absolute -bottom-1 -right-1 text-[10.5px] font-black text-slate-900 bg-white leading-none">
-                  $
-                </span>
+          <div
+            onClick={() => setIsSlipModalOpen(true)}
+            className="col-span-2 bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3 sm:p-3.5 flex items-center justify-between gap-3 sm:gap-3.5 hover:border-blue-300 hover:shadow-xs transition-all group cursor-pointer select-none"
+          >
+            <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <div className="relative flex items-center justify-center">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="24"
+                    height="24"
+                    stroke="currentColor"
+                    strokeWidth="2.1"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-slate-800"
+                  >
+                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    <polyline points="9 22 9 13 15 13 15 22" />
+                  </svg>
+                  <span className="absolute -bottom-1 -right-1 text-[10.5px] font-black text-slate-900 bg-white leading-none">
+                    $
+                  </span>
+                </div>
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-[15px] sm:text-[16px] font-bold italic text-[#1f6db8] leading-tight">
+                  Take Home Pay
+                </h4>
+                <p className="text-[11.5px] sm:text-[12px] text-slate-500 font-medium italic mt-0.5">
+                  Rp {monthlySummary.takeHomePay.toLocaleString("id-ID")}
+                </p>
               </div>
             </div>
-            <div className="min-w-0">
-              <h4 className="text-[15px] sm:text-[16px] font-bold italic text-[#1f6db8] leading-tight">
-                Take Home Pay
-              </h4>
-              <p className="text-[11.5px] sm:text-[12px] text-slate-400 font-medium italic mt-0.5">
-                Rp. -
-              </p>
+
+            {/* Tombol Icon Download di sebelah kanan kartu */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDirectDownloadPNG();
+                }}
+                title="Unduh Gambar Slip Gaji (.PNG)"
+                className="w-10 h-10 rounded-xl bg-[#f0f7fd] hover:bg-[#e1f0fa] active:scale-90 text-[#156bb8] border border-[#cbe3f6] flex items-center justify-center transition-all cursor-pointer shadow-2xs group/btn"
+              >
+                <Download size={18} strokeWidth={2.3} className="group-hover/btn:scale-110 transition-transform" />
+              </button>
             </div>
           </div>
         </div>
@@ -1018,7 +1217,11 @@ export default function HomePage() {
             <div className="flex items-center justify-between bg-slate-50 border border-slate-200/80 rounded-2xl px-4 py-2 my-4">
               <button
                 type="button"
-                onClick={() => setSelectedYear((prev) => prev - 1)}
+                onClick={() => {
+                  const newYear = selectedYear - 1;
+                  setSelectedYear(newYear);
+                  setCurrentMonthYear(`${ALL_MONTHS[selectedMonth]} ${newYear}`);
+                }}
                 className="w-8 h-8 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs flex items-center justify-center text-slate-600 hover:text-slate-900 transition-all active:scale-95 cursor-pointer"
                 aria-label="Tahun Sebelumnya"
               >
@@ -1029,7 +1232,11 @@ export default function HomePage() {
               </span>
               <button
                 type="button"
-                onClick={() => setSelectedYear((prev) => prev + 1)}
+                onClick={() => {
+                  const newYear = selectedYear + 1;
+                  setSelectedYear(newYear);
+                  setCurrentMonthYear(`${ALL_MONTHS[selectedMonth]} ${newYear}`);
+                }}
                 className="w-8 h-8 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs flex items-center justify-center text-slate-600 hover:text-slate-900 transition-all active:scale-95 cursor-pointer"
                 aria-label="Tahun Berikutnya"
               >
@@ -1077,16 +1284,23 @@ export default function HomePage() {
           >
             {/* Header: Riwayat [Tipe] & X Button */}
             <div className="flex items-center justify-between">
-              <h3 className="text-[19px] sm:text-[21px] text-slate-800 tracking-tight">
-                <span className="italic font-normal">Riwayat </span>
-                <span className="italic font-black text-slate-900">
-                  {selectedHistoryType === "sakit"
-                    ? "Sakit"
-                    : selectedHistoryType === "cuti"
-                    ? "Cuti"
-                    : "Ijin"}
-                </span>
-              </h3>
+              <div>
+                <h3 className="text-[19px] sm:text-[21px] text-slate-800 tracking-tight">
+                  <span className="italic font-normal">Riwayat </span>
+                  <span className="italic font-black text-slate-900">
+                    {selectedHistoryType === "sakit"
+                      ? "Sakit"
+                      : selectedHistoryType === "cuti"
+                      ? "Cuti"
+                      : selectedHistoryType === "dinas"
+                      ? "Perjalanan Dinas"
+                      : "Ijin"}
+                  </span>
+                </h3>
+                <p className="text-[11.5px] sm:text-[12px] text-[#156bb8] font-bold mt-0.5">
+                  Periode {currentMonthYear}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setSelectedHistoryType(null)}
@@ -1109,7 +1323,10 @@ export default function HomePage() {
                     ? "sakit"
                     : selectedHistoryType === "cuti"
                     ? "cuti"
-                    : "ijin"}
+                    : selectedHistoryType === "dinas"
+                    ? "perjalanan dinas"
+                    : "ijin"}{" "}
+                  pada bulan {currentMonthYear}
                 </div>
               ) : (
                 currentHistoryList.map((item) => {
@@ -1121,14 +1338,17 @@ export default function HomePage() {
                     >
                       {/* Left: Indicator Bar + Details */}
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-1.5 h-10 bg-[#156bb8] rounded-full shrink-0" />
+                        <div className="w-1.5 h-11 bg-[#156bb8] rounded-full shrink-0" />
                         <div className="min-w-0">
                           <h4 className="text-[14.5px] sm:text-[15.5px] font-bold italic text-slate-900 leading-snug truncate">
-                            {item.reason || item.keperluan || "Deskripsi"}
+                            {item.reason || item.keperluan || "Perjalanan Dinas"}
                           </h4>
                           <p className="text-[11.5px] sm:text-[12.5px] font-medium text-[#156bb8] mt-0.5">
                             {dateStr}
                           </p>
+                          <span className="inline-block text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md mt-1">
+                            {item.totalDays || 1} Hari{selectedHistoryType === "dinas" ? " Dinas" : ""}
+                          </span>
                         </div>
                       </div>
 
@@ -1188,13 +1408,15 @@ export default function HomePage() {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
                 <h3 className="text-[17px] font-bold text-slate-800 leading-tight">
-                  Dokumentasi Riwayat
+                  Dokumentasi {previewDocModal.type === "dinas" ? "Perjalanan Dinas" : "Riwayat"}
                 </h3>
                 <p className="text-[12px] text-slate-400 font-medium">
                   {previewDocModal.type === "izin"
                     ? "Ijin"
                     : previewDocModal.type === "sakit"
                     ? "Sakit"
+                    : previewDocModal.type === "dinas"
+                    ? "Perjalanan Dinas"
                     : "Cuti"}{" "}
                   • {formatItemDate(previewDocModal)}
                 </p>
@@ -1211,9 +1433,29 @@ export default function HomePage() {
 
             {/* Body */}
             <div className="py-4 overflow-y-auto space-y-3.5">
+              {/* Rentang Tanggal & Durasi Dinas Box */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3">
+                  <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                    Rentang Waktu
+                  </span>
+                  <p className="text-[12px] font-bold text-slate-800 leading-snug">
+                    {formatItemDate(previewDocModal)}
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3">
+                  <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                    Durasi
+                  </span>
+                  <p className="text-[12px] font-bold text-[#156bb8] leading-snug">
+                    {previewDocModal.totalDays || 1} Hari {previewDocModal.type === "dinas" ? "Dinas" : ""}
+                  </p>
+                </div>
+              </div>
+
               <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Deskripsi / Alasan
+                  Deskripsi / Agenda Dinas
                 </span>
                 <p className="text-[14px] font-bold text-slate-800 leading-snug">
                   {previewDocModal.reason || previewDocModal.keperluan || "-"}
@@ -1280,6 +1522,19 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {/* ══════════════ MODALS SLIP GAJI ══════════════ */}
+      <SlipGajiModal
+        isOpen={isSlipModalOpen}
+        onClose={() => setIsSlipModalOpen(false)}
+        periode={currentMonthYear}
+        data={currentSlipData}
+      />
+
+      {/* Render Slip Tersembunyi untuk Download Langsung dari Tombol Kartu */}
+      <div className="fixed -left-[9999px] top-0 pointer-events-none opacity-0" aria-hidden="true">
+        <SlipGajiPaper ref={hiddenSlipRef} periode={currentMonthYear} data={currentSlipData} />
+      </div>
     </div>
   );
 }
