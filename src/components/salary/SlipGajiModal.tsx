@@ -6,7 +6,7 @@ import {
   Download,
   CheckCircle2,
   Wallet,
-  Coins,
+  Database,
   Banknote,
   FileText,
 } from "lucide-react";
@@ -120,11 +120,93 @@ export const formatRupiah = (val: number): string => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-// 1. DOKUMEN SLIP GAJI PAPER (EXACT LAYOUT DARI TEMPLATE GAMBAR)
+// 1. DOKUMEN SLIP GAJI PAPER (KANVAS 1254 x 1254 — PERSIS GAMBAR 1:1)
 // ══════════════════════════════════════════════════════════════════════════
 export interface SlipGajiPaperProps {
   data?: SlipGajiData;
   periode?: string;
+}
+
+/** Ukuran kanvas asli slip gaji (sama persis dengan desain di folder New). */
+export const SLIP_CANVAS_SIZE = 1254;
+
+const CONTENT_LEFT = 57;
+const CONTENT_WIDTH = 1140;
+
+const useIsoLayoutEffect =
+  typeof window !== "undefined" ? React.useLayoutEffect : React.useEffect;
+
+// ── Tabel item (Penerimaan / Pengurangan) ─────────────────────────────────
+interface SlipTableProps {
+  top: number;
+  height: number;
+  title: string;
+  icon: React.ReactNode;
+  items: { no: number; nama: string; jumlah: number }[];
+  totalLabel: string;
+  total: number;
+}
+
+function SlipTable({ top, height, title, icon, items, totalLabel, total }: SlipTableProps) {
+  return (
+    <div
+      className="absolute"
+      style={{ left: CONTENT_LEFT, top, width: CONTENT_WIDTH, height }}
+    >
+      <div className="flex h-full flex-col overflow-hidden rounded-[10px] border border-[#cfe3f5] bg-white shadow-[0_2px_6px_rgba(23,86,150,0.06)]">
+        {/* Header */}
+        <div
+          className="relative flex h-[43px] shrink-0 items-center text-white"
+          style={{
+            paddingLeft: 25,
+            paddingRight: 17,
+            background:
+              "linear-gradient(96deg,#1b62ad 0%,#2a86dd 58%,#1368bb 100%)",
+          }}
+        >
+          <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-white text-[#1e6fb8] shadow-[0_1px_3px_rgba(0,0,0,0.18)]">
+            {icon}
+          </div>
+          <span className="ml-[37px] text-[22px] font-extrabold uppercase leading-none tracking-[0.04em]">
+            {title}
+          </span>
+          <span className="absolute right-[76px] top-1/2 -translate-y-1/2 text-[17px] font-extrabold uppercase leading-none tracking-[0.03em]">
+            JUMLAH
+          </span>
+        </div>
+
+        {/* Rows */}
+        <div className="flex flex-1 flex-col">
+          {items.map((item, idx) => (
+            <div
+              key={item.no}
+              className={`flex flex-1 items-center ${
+                idx % 2 === 1 ? "bg-[#f4f9fd]" : "bg-white"
+              }`}
+            >
+              <div className="ml-[1px] flex h-[27px] w-[38px] shrink-0 items-center justify-center rounded-[6px] bg-[#e8f2fc] text-[16px] font-semibold text-[#5c7a99]">
+                {item.no}
+              </div>
+              <div className="min-w-0 flex-1 truncate pl-[61px] text-[18px] text-[#33475b]">
+                {item.nama}
+              </div>
+              <div className="w-[251px] shrink-0 border-l border-[#e2eef8] pr-[26px] text-right text-[18px] font-semibold text-[#1f2d3d]">
+                {formatRupiah(item.jumlah)}
+              </div>
+            </div>
+          ))}
+
+          {/* Total */}
+          <div className="flex h-[40px] shrink-0 items-center bg-[#d9ebfa] font-bold text-[#1b4f80]">
+            <div className="flex-1 pl-[100px] text-[21px]">{totalLabel}</div>
+            <div className="w-[251px] shrink-0 border-l border-[#c7dff4] pr-[26px] text-right text-[21px]">
+              {formatRupiah(total)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export const SlipGajiPaper = forwardRef<HTMLDivElement, SlipGajiPaperProps>(
@@ -142,325 +224,284 @@ export const SlipGajiPaper = forwardRef<HTMLDivElement, SlipGajiPaperProps>(
     const totalPengurangan = activeData.pengurangan.reduce((sum, item) => sum + item.jumlah, 0);
     const takeHomePay = totalBruto - totalPengurangan;
 
+    // ── Auto-scale: kanvas 1254px diskalakan agar pas dengan lebar container ──
+    const wrapRef = useRef<HTMLDivElement | null>(null);
+    const [scale, setScale] = useState<number>(0);
+
+    useIsoLayoutEffect(() => {
+      const el = wrapRef.current;
+      if (!el) return;
+      const measure = () => {
+        const w = el.clientWidth;
+        setScale(w > 0 ? w / SLIP_CANVAS_SIZE : 1);
+      };
+      measure();
+      if (typeof ResizeObserver === "undefined") return;
+      const ro = new ResizeObserver(measure);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }, []);
+
+    const activeScale = scale > 0 ? scale : 1;
+
     return (
       <div
-        ref={ref}
-        className="relative bg-white rounded-3xl border border-slate-200/90 shadow-sm p-4 sm:p-7 text-slate-800 text-[10.5px] sm:text-[11.5px] leading-tight select-none overflow-hidden w-full max-w-xl mx-auto"
-        style={{ minWidth: "320px", backgroundColor: "#ffffff" }}
+        ref={wrapRef}
+        className="w-full"
+        style={{ height: SLIP_CANVAS_SIZE * activeScale }}
       >
-        {/* ── Top Right Decorative Wave ── */}
-        <div className="absolute top-0 right-0 w-36 sm:w-48 h-36 sm:h-48 pointer-events-none opacity-90 overflow-hidden select-none">
-          <svg viewBox="0 0 200 200" className="w-full h-full fill-none">
-            <path
-              d="M0 0 C70 30, 135 65, 200 160 L200 0 Z"
-              fill="url(#topWave1)"
-              opacity="0.8"
-            />
-            <path
-              d="M50 0 C110 35, 155 85, 200 200 L200 0 Z"
-              fill="url(#topWave2)"
-            />
+        <div
+          ref={ref}
+          className="relative overflow-hidden bg-[#fbfdff] font-sans text-slate-800 select-none"
+          style={{
+            width: SLIP_CANVAS_SIZE,
+            height: SLIP_CANVAS_SIZE,
+            transform: `scale(${activeScale})`,
+            transformOrigin: "top left",
+          }}
+        >
+          {/* ── Ornamen gelombang biru (pojok kanan atas & kiri bawah) ── */}
+          <svg
+            viewBox="0 0 1254 1254"
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            aria-hidden="true"
+          >
             <defs>
-              <linearGradient id="topWave1" x1="0" y1="0" x2="1" y2="1">
+              <linearGradient id="slipWaveTop1" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="#7dd3fc" />
-                <stop offset="100%" stopColor="#0284c7" />
+                <stop offset="100%" stopColor="#0ea5e9" />
               </linearGradient>
-              <linearGradient id="topWave2" x1="0" y1="0" x2="1" y2="1">
+              <linearGradient id="slipWaveTop2" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="#38bdf8" />
-                <stop offset="100%" stopColor="#0369a1" />
+                <stop offset="100%" stopColor="#075985" />
               </linearGradient>
-            </defs>
-          </svg>
-        </div>
-
-        {/* ── Bottom Left Decorative Wave ── */}
-        <div className="absolute bottom-0 left-0 w-32 sm:w-44 h-32 sm:h-44 pointer-events-none opacity-90 overflow-hidden select-none">
-          <svg viewBox="0 0 160 160" className="w-full h-full fill-none">
-            <path
-              d="M0 160 C30 100, 70 70, 160 30 L0 0 Z"
-              fill="url(#botWave1)"
-              opacity="0.35"
-            />
-            <path
-              d="M0 160 C40 105, 80 75, 160 55 L0 160 Z"
-              fill="url(#botWave2)"
-              opacity="0.9"
-            />
-            <defs>
-              <linearGradient id="botWave1" x1="0" y1="0" x2="1" y2="1">
+              <linearGradient id="slipWaveBot1" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="#bae6fd" />
                 <stop offset="100%" stopColor="#38bdf8" />
               </linearGradient>
-              <linearGradient id="botWave2" x1="0" y1="0" x2="1" y2="1">
+              <linearGradient id="slipWaveBot2" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="#0284c7" />
                 <stop offset="100%" stopColor="#075985" />
               </linearGradient>
             </defs>
+            <path
+              d="M1000 0 C1090 90 1170 130 1254 235 L1254 0 Z"
+              fill="url(#slipWaveTop1)"
+              opacity="0.55"
+            />
+            <path
+              d="M1118 0 C1175 70 1215 115 1254 178 L1254 0 Z"
+              fill="url(#slipWaveTop2)"
+            />
+            <path
+              d="M0 1254 C55 1180 130 1120 260 1078 L0 1078 Z"
+              fill="url(#slipWaveBot1)"
+              opacity="0.55"
+            />
+            <path
+              d="M0 1254 C35 1200 90 1160 175 1140 L0 1140 Z"
+              fill="url(#slipWaveBot2)"
+            />
           </svg>
-        </div>
 
-        {/* ══════════════ 1. HEADER TITLE ══════════════ */}
-        <div className="text-center relative z-10 mb-4 sm:mb-5">
-          <h1 className="text-2xl sm:text-[30px] font-black text-[#133d6b] tracking-wider uppercase font-sans">
-            SLIP GAJI
-          </h1>
-          <div className="w-16 h-1.5 bg-gradient-to-r from-[#0284c7] via-[#0ea5e9] to-[#38bdf8] rounded-full mx-auto mt-1" />
-        </div>
+          {/* ── Judul ── */}
+          <div className="absolute left-0 right-0 top-[21px] text-center">
+            <h1 className="text-[58px] font-black uppercase leading-none tracking-normal text-[#123c69]">
+              SLIP GAJI
+            </h1>
+          </div>
+          <div className="absolute left-1/2 top-[87px] h-[6px] w-[123px] -translate-x-1/2 rounded-full bg-gradient-to-r from-[#0284c7] via-[#0ea5e9] to-[#38bdf8]" />
 
-        {/* ══════════════ 2. COMPANY & EMPLOYEE INFO ══════════════ */}
-        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 relative z-10 mb-3 sm:mb-4 items-center">
-          {/* Sisi Kiri: Logo & Alamat Perusahaan */}
-          <div className="sm:col-span-7 flex items-center gap-3">
-            {/* Logo BISA MEDIA dari /app-logo.png */}
-            <div className="flex flex-col items-center justify-center shrink-0">
-              <img
-                src="/app-logo.png"
-                alt="Logo Bisa Media"
-                className="w-13 h-13 sm:w-15 sm:h-15 object-contain drop-shadow-xs"
-              />
-              <span className="text-[7.5px] sm:text-[8.5px] font-black text-[#0f4477] tracking-wider uppercase mt-0.5">
-                BISA MEDIA
-              </span>
-            </div>
+          {/* ── Kartu utama slip ── */}
+          <div className="absolute left-[48px] top-[97px] h-[1134px] w-[1158px] rounded-[14px] border border-[#e8f2fb] bg-white shadow-[0_10px_30px_rgba(21,90,160,0.08)]" />
 
-            <div>
-              <h2 className="text-xs sm:text-[13.5px] font-black text-[#0c3f6e] uppercase tracking-wide">
-                PT BISA MEDIA GRUP
-              </h2>
-              <p className="text-[9.5px] sm:text-[10.5px] text-slate-500 leading-snug mt-0.5">
-                Jl. Cisalak No.47B, Sukamanah, Kec. Cipedes,
-                <br />
-                Kab. Tasikmalaya, Jawa Barat 46133
-              </p>
+          {/* ── Logo & alamat perusahaan ── */}
+          <div className="absolute" style={{ left: 79, top: 121, width: 120 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/app-logo.png"
+              alt="Logo Bisa Media"
+              style={{ width: 88, height: 88, objectFit: "contain", marginLeft: 16 }}
+            />
+            <div className="mt-[6px] whitespace-nowrap text-center text-[15px] font-extrabold uppercase leading-none tracking-[0.06em] text-[#123c69]">
+              BISA MEDIA
             </div>
           </div>
 
-          {/* Sisi Kanan: Box Identitas Karyawan & Periode (Otomatis Update) */}
-          <div className="sm:col-span-5 bg-[#edf5fc] rounded-xl p-2.5 sm:p-3 border border-[#d2e7f8] text-[9.5px] sm:text-[10.5px]">
-            <table className="w-full">
-              <tbody>
-                <tr>
-                  <td className="text-[#0f4477] font-semibold py-0.5 w-[65px] sm:w-[70px]">Periode</td>
-                  <td className="text-slate-400 w-3">:</td>
-                  <td className="font-medium text-slate-800">
-                    <div className="flex justify-between items-center pr-2">
-                      <span>{periodeBulan}</span>
-                      <span>{periodeTahun}</span>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="text-[#0f4477] font-semibold py-0.5">ID</td>
-                  <td className="text-slate-400">:</td>
-                  <td className="font-medium text-slate-800">{activeData.idKaryawan}</td>
-                </tr>
-                <tr>
-                  <td className="text-[#0f4477] font-semibold py-0.5">Karyawan</td>
-                  <td className="text-slate-400">:</td>
-                  <td className="font-medium text-slate-800">{activeData.namaKaryawan}</td>
-                </tr>
-                <tr>
-                  <td className="text-[#0f4477] font-semibold py-0.5">Jabatan</td>
-                  <td className="text-slate-400">:</td>
-                  <td className="font-medium text-slate-800">{activeData.jabatan}</td>
-                </tr>
-                <tr>
-                  <td className="text-[#0f4477] font-semibold py-0.5">Status</td>
-                  <td className="text-slate-400">:</td>
-                  <td className="font-medium text-slate-800">{activeData.status}</td>
-                </tr>
-              </tbody>
-            </table>
+          <div className="absolute" style={{ left: 226, top: 132, width: 470 }}>
+            <h2 className="text-[21px] font-extrabold uppercase leading-none tracking-[0.01em] text-[#1b3f6d]">
+              PT BISA MEDIA GRUP
+            </h2>
+            <p className="mt-[14px] text-[18px] leading-[25px] text-[#33475b]">
+              Jl. Cisalak No.47B, Sukamanah, Kec. Cipedes,
+              <br />
+              Kab. Tasikmalaya, Jawa Barat 46133
+            </p>
           </div>
-        </div>
 
-        {/* ══════════════ 3. TABEL PENERIMAAN ══════════════ */}
-        <div className="rounded-xl overflow-hidden border border-[#bfe0f8] mb-2.5 sm:mb-3 relative z-10 shadow-xs">
-          {/* Header Penerimaan */}
-          <div className="bg-[#1575ca] text-white px-3 py-1.5 flex items-center justify-between font-bold text-[10.5px] sm:text-[11.5px] uppercase tracking-wider">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-md bg-white/20 flex items-center justify-center">
-                <Wallet size={12} className="text-white" />
+          {/* Garis pemisah perusahaan & identitas */}
+          <div
+            className="absolute w-px bg-[#dbe7f3]"
+            style={{ left: 712, top: 126, height: 118 }}
+          />
+
+          {/* ── Kotak identitas karyawan ── */}
+          <div
+            className="absolute rounded-[10px] bg-[#eaf4fd] px-[22px] pb-[11px] pt-[15px]"
+            style={{ left: 740, top: 105, width: 457, height: 152 }}
+          >
+            <div className="flex h-full flex-col justify-between text-[18px] leading-none">
+              <div className="flex items-center">
+                <span className="w-[116px] shrink-0 font-bold text-[#1b4f80]">Periode</span>
+                <span className="w-[34px] shrink-0 text-[#8aa0b5]">:</span>
+                <span className="flex-1 text-[#33475b]">{periodeBulan}</span>
+                <span className="pr-[38px] text-[#33475b]">{periodeTahun}</span>
               </div>
-              <span>PENERIMAAN</span>
-            </div>
-            <span>JUMLAH</span>
-          </div>
-
-          {/* Rows Penerimaan */}
-          <div className="divide-y divide-[#e3f0fa] text-[10px] sm:text-[11px]">
-            {activeData.penerimaan.map((item, idx) => (
-              <div
-                key={item.no}
-                className={`flex items-center justify-between py-1 pr-3 ${
-                  idx % 2 === 1 ? "bg-[#f4f9fd]" : "bg-white"
-                }`}
-              >
-                <div className="flex items-center">
-                  <span className="w-8 text-center text-slate-500 font-semibold text-[9.5px] bg-[#eaf3fb] py-1 border-r border-[#d4e7f8] mr-2.5">
-                    {item.no}
-                  </span>
-                  <span className="text-slate-700 font-medium">{item.nama}</span>
-                </div>
-                <span className="font-semibold text-slate-800 tracking-tight">
-                  {formatRupiah(item.jumlah)}
-                </span>
+              <div className="flex items-center">
+                <span className="w-[116px] shrink-0 font-bold text-[#1b4f80]">ID</span>
+                <span className="w-[34px] shrink-0 text-[#8aa0b5]">:</span>
+                <span className="text-[#33475b]">{activeData.idKaryawan}</span>
               </div>
-            ))}
-
-            {/* Footer Total Bruto */}
-            <div className="bg-[#d5ebfa] px-3 py-1.5 flex items-center justify-between font-bold text-[10.5px] sm:text-[11.5px] text-[#0f4477]">
-              <span>Total Penghasilan Bruto</span>
-              <span>{formatRupiah(totalBruto)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* ══════════════ 4. TABEL PENGURANGAN ══════════════ */}
-        <div className="rounded-xl overflow-hidden border border-[#bfe0f8] mb-2.5 sm:mb-3 relative z-10 shadow-xs">
-          {/* Header Pengurangan */}
-          <div className="bg-[#1575ca] text-white px-3 py-1.5 flex items-center justify-between font-bold text-[10.5px] sm:text-[11.5px] uppercase tracking-wider">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-md bg-white/20 flex items-center justify-center">
-                <Coins size={12} className="text-white" />
+              <div className="flex items-center">
+                <span className="w-[116px] shrink-0 font-bold text-[#1b4f80]">Karyawan</span>
+                <span className="w-[34px] shrink-0 text-[#8aa0b5]">:</span>
+                <span className="text-[#33475b]">{activeData.namaKaryawan}</span>
               </div>
-              <span>PENGURANGAN</span>
-            </div>
-            <span>JUMLAH</span>
-          </div>
-
-          {/* Rows Pengurangan */}
-          <div className="divide-y divide-[#e3f0fa] text-[10px] sm:text-[11px]">
-            {activeData.pengurangan.map((item, idx) => (
-              <div
-                key={item.no}
-                className={`flex items-center justify-between py-1 pr-3 ${
-                  idx % 2 === 1 ? "bg-[#f4f9fd]" : "bg-white"
-                }`}
-              >
-                <div className="flex items-center">
-                  <span className="w-8 text-center text-slate-500 font-semibold text-[9.5px] bg-[#eaf3fb] py-1 border-r border-[#d4e7f8] mr-2.5">
-                    {item.no}
-                  </span>
-                  <span className="text-slate-700 font-medium">{item.nama}</span>
-                </div>
-                <span className="font-semibold text-slate-800 tracking-tight">
-                  {formatRupiah(item.jumlah)}
-                </span>
+              <div className="flex items-center">
+                <span className="w-[116px] shrink-0 font-bold text-[#1b4f80]">Jabatan</span>
+                <span className="w-[34px] shrink-0 text-[#8aa0b5]">:</span>
+                <span className="text-[#33475b]">{activeData.jabatan}</span>
               </div>
-            ))}
-
-            {/* Footer Total Pengurangan */}
-            <div className="bg-[#d5ebfa] px-3 py-1.5 flex items-center justify-between font-bold text-[10.5px] sm:text-[11.5px] text-[#0f4477]">
-              <span>Total Pengurangan</span>
-              <span>{formatRupiah(totalPengurangan)}</span>
+              <div className="flex items-center">
+                <span className="w-[116px] shrink-0 font-bold text-[#1b4f80]">Status</span>
+                <span className="w-[34px] shrink-0 text-[#8aa0b5]">:</span>
+                <span className="text-[#33475b]">{activeData.status}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* ══════════════ 5. TAKE HOME PAY BANNER ══════════════ */}
-        <div className="bg-[#1470c4] text-white rounded-xl px-3.5 py-2 sm:px-4 sm:py-2.5 flex items-center justify-between shadow-sm mb-2 relative z-10">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center">
-              <Banknote size={15} className="text-white" />
+          {/* ── Tabel Penerimaan ── */}
+          <SlipTable
+            top={273}
+            height={361}
+            title="PENERIMAAN"
+            icon={<Wallet size={20} strokeWidth={2.2} />}
+            items={activeData.penerimaan}
+            totalLabel="Total Penghasilan Bruto"
+            total={totalBruto}
+          />
+
+          {/* ── Tabel Pengurangan ── */}
+          <SlipTable
+            top={649}
+            height={281}
+            title="PENGURANGAN"
+            icon={<Database size={19} strokeWidth={2.2} />}
+            items={activeData.pengurangan}
+            totalLabel="Total Pengurangan"
+            total={totalPengurangan}
+          />
+
+          {/* ── Take Home Pay ── */}
+          <div
+            className="absolute flex items-center rounded-[10px] px-[25px] text-white shadow-[0_3px_10px_rgba(15,88,160,0.18)]"
+            style={{
+              left: CONTENT_LEFT,
+              top: 943,
+              width: CONTENT_WIDTH,
+              height: 57,
+              background:
+                "linear-gradient(96deg,#1465b2 0%,#2a86dd 58%,#1266b8 100%)",
+            }}
+          >
+            <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-white/25">
+              <Banknote size={20} strokeWidth={2.1} />
             </div>
-            <span className="font-black text-xs sm:text-sm tracking-widest uppercase">
+            <span className="ml-[45px] text-[26px] font-black uppercase leading-none tracking-normal">
               TAKE HOME PAY
             </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="h-5 w-[1.5px] bg-white/40" />
-            <span className="text-base sm:text-lg font-black tracking-tight">
+            <div
+              className="absolute top-1/2 h-[34px] w-[2px] -translate-y-1/2 bg-white/50"
+              style={{ left: 890 }}
+            />
+            <span className="ml-auto text-[38px] font-black leading-none tracking-[0.01em]">
               {formatRupiah(takeHomePay)}
             </span>
           </div>
-        </div>
 
-        {/* ══════════════ 6. TERBILANG ══════════════ */}
-        <div className="bg-[#edf6fd] border border-[#d5e7f7] rounded-xl px-3 py-1.5 sm:py-2 flex items-center gap-2 sm:gap-2.5 mb-3 sm:mb-4 relative z-10 text-[9.5px] sm:text-[10.5px]">
-          <div className="bg-[#c8e2f8] text-[#0f5ca8] font-black text-[9.5px] sm:text-[10px] px-2 py-0.5 rounded-md shrink-0 flex items-center gap-1">
-            <span className="font-black">#</span>
-            <span>Terbilang</span>
-          </div>
-          <span className="italic text-slate-700 font-medium">
-            {activeData.terbilang}
-          </span>
-        </div>
-
-        {/* ══════════════ 7. TANDA TANGAN / PENGESAHAN ══════════════ */}
-        <div className="border border-[#d2e5f5] rounded-2xl p-3 sm:p-4 bg-white/80 relative z-10 text-[9.5px] sm:text-[10.5px]">
-          {/* Tanggal & Kota di pojok kanan atas - Otomatis update sesuai bulan dan tahun */}
-          <div className="text-right text-slate-700 font-semibold mb-2 sm:mb-3 pr-2 sm:pr-4 flex justify-end gap-6 sm:gap-8 tracking-wide">
-            <span>{activeData.kotaTtd || "Tasikmalaya"}</span>
-            <span>{periodeBulan}</span>
-            <span>{periodeTahun}</span>
+          {/* ── Terbilang ── */}
+          <div
+            className="absolute flex items-center overflow-hidden rounded-[8px] border border-[#dbe9f7] bg-[#eef6fd]"
+            style={{ left: CONTENT_LEFT, top: 1015, width: CONTENT_WIDTH, height: 42 }}
+          >
+            <div className="flex h-full w-[133px] shrink-0 items-center gap-[10px] bg-[#cfe4f7] px-[16px] text-[#16456f]">
+              <span className="text-[20px] font-black leading-none">#</span>
+              <span className="text-[18px] font-bold leading-none">Terbilang</span>
+            </div>
+            <span className="ml-[56px] text-[17px] italic leading-none text-[#33475b]">
+              {activeData.terbilang}
+            </span>
           </div>
 
-          <div className="grid grid-cols-2 relative text-center">
-            {/* Penerima (Sisi Kiri) */}
-            <div className="flex flex-col items-center justify-between pr-3 sm:pr-6">
-              <p className="font-semibold text-slate-700">Penerima</p>
+          {/* ── Tanda tangan / pengesahan ── */}
+          <div
+            className="absolute rounded-[10px] border border-[#e3eef8] bg-white"
+            style={{ left: CONTENT_LEFT, top: 1070, width: CONTENT_WIDTH, height: 152 }}
+          >
+            {/* Kota & tanggal (kanan atas) */}
+            <div className="absolute right-[129px] top-[10px] flex items-center gap-[38px] text-[17px] leading-none text-[#33475b]">
+              <span>{activeData.kotaTtd || "Tasikmalaya"}</span>
+              <span>{periodeBulan}</span>
+              <span>{periodeTahun}</span>
+            </div>
 
-              {/* Spacer tinggi untuk tanda tangan manual */}
-              <div className="h-14 sm:h-16" />
+            {/* Garis pembatas vertikal tengah */}
+            <div className="absolute bottom-[12px] left-1/2 top-[12px] w-px -translate-x-1/2 bg-[#e6eef7]" />
 
-              <div className="w-full max-w-[140px] sm:max-w-[170px] border-b border-slate-700 pb-0.5">
-                <span className="font-bold text-slate-800 text-[10px] sm:text-[11px]">
-                  {activeData.namaPenerima}
-                </span>
+            {/* Kolom kiri: Penerima */}
+            <div className="absolute bottom-[3px] left-0 right-1/2 top-[40px] flex flex-col items-center pr-[34px]">
+              <span className="text-[18px] leading-none text-[#33475b]">Penerima</span>
+              <div className="mt-auto w-[268px] border-t border-[#33475b] pt-[6px] text-center text-[19px] font-semibold leading-none text-[#23303d]">
+                {activeData.namaPenerima}
               </div>
             </div>
 
-            {/* Garis Pembatas Vertikal di Tengah */}
-            <div className="absolute left-1/2 top-0 bottom-0 w-[1px] bg-[#dbe8f5] -translate-x-1/2 pointer-events-none" />
+            {/* Kolom kanan: Perusahaan + tanda tangan */}
+            <div className="absolute bottom-[3px] left-1/2 right-0 top-[40px] flex flex-col items-center pl-[54px]">
+              <span className="translate-x-[24px] text-[18px] leading-none text-[#33475b]">
+                PT BISA MEDIA GRUP
+              </span>
 
-            {/* Perusahaan & TTD (Sisi Kanan) */}
-            <div className="flex flex-col items-center justify-between pl-3 sm:pl-6">
-              <p className="font-semibold text-slate-700">PT BISA MEDIA GRUP</p>
-
-              {/* Tanda Tangan Syahrul Muharrom - Persis seperti di gambar */}
-              <div className="w-24 sm:w-32 h-14 sm:h-16 relative flex items-center justify-center -my-1">
+              <div className="mt-[6px] h-[62px] w-[110px]">
                 <svg
-                  viewBox="0 0 160 85"
-                  className="w-full h-full text-[#112338] stroke-current fill-none select-none"
+                  viewBox="14 4 86 78"
+                  preserveAspectRatio="none"
+                  className="h-full w-full fill-none stroke-current text-[#112338]"
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  aria-hidden="true"
                 >
-                  {/* 1. Oval horizontal melingkar di sisi kiri */}
                   <path
                     d="M 38 48 C 22 42, 18 26, 36 24 C 54 22, 68 32, 62 48 C 58 57, 46 54, 38 48 Z"
                     strokeWidth="2.4"
                   />
-
-                  {/* 2. Garis vertikal 1 (memotong bagian kiri oval) */}
                   <path d="M 52 18 L 52 70" strokeWidth="2.8" />
-
-                  {/* 3. Garis vertikal 2 (tengah, menjulang lebih tinggi) */}
                   <path d="M 62 12 L 62 74" strokeWidth="2.8" />
-
-                  {/* 4. Cursive scribble 'muh' di antara garis 2 dan 3 */}
                   <path
                     d="M 65 42 Q 68 36 70 42 Q 73 36 75 41 Q 78 37 80 40"
                     strokeWidth="2.0"
                   />
-                  {/* Aksen garis bawah pada scribble */}
                   <path d="M 67 47 L 78 47" strokeWidth="2.1" />
-
-                  {/* 5. Garis vertikal 3 dengan loop ascender melengkung di atas */}
                   <path
                     d="M 80 44 C 79 24, 82 8, 86 7 C 88.5 6, 88 18, 87 32 L 87 74"
                     strokeWidth="2.7"
                   />
-
-                  {/* 6. Titik tinta di sebelah kanan */}
                   <circle cx="94" cy="51" r="1.6" className="fill-current stroke-none" />
                 </svg>
               </div>
 
-              <div className="w-full max-w-[140px] sm:max-w-[170px] border-b border-slate-700 pb-0.5">
-                <span className="font-bold text-slate-800 text-[10px] sm:text-[11px]">
-                  {activeData.namaAtasan}
-                </span>
+              <div className="mt-auto w-[240px] border-t border-[#33475b] pt-[6px] text-center text-[19px] font-semibold leading-none text-[#23303d]">
+                {activeData.namaAtasan}
               </div>
             </div>
           </div>
@@ -478,9 +519,15 @@ SlipGajiPaper.displayName = "SlipGajiPaper";
 export async function exportSlipElementToPNG(element: HTMLElement, filename: string) {
   const { toPng } = await import("html-to-image");
   const dataUrl = await toPng(element, {
-    pixelRatio: 2.5,
+    width: SLIP_CANVAS_SIZE,
+    height: SLIP_CANVAS_SIZE,
+    pixelRatio: 2,
     backgroundColor: "#ffffff",
     cacheBust: true,
+    style: {
+      transform: "none",
+      transformOrigin: "top left",
+    },
   });
 
   const link = document.createElement("a");
@@ -534,7 +581,7 @@ export default function SlipGajiModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-5 bg-slate-900/70 backdrop-blur-sm animate-fade-in overflow-y-auto overflow-x-hidden">
-      <div className="relative w-full max-w-lg bg-white rounded-[24px] sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto animate-scale-up flex flex-col max-h-[90vh] sm:max-h-[92vh]">
+      <div className="relative w-full max-w-lg sm:max-w-2xl bg-white rounded-[24px] sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto animate-scale-up flex flex-col max-h-[90vh] sm:max-h-[92vh]">
         
         {/* ── TOP HEADER (BERSIH & LEGA: HANYA JUDUL & TOMBOL CLOSE BESAR) ── */}
         <div className="flex items-center justify-between px-3.5 sm:px-5 py-2.5 sm:py-3.5 bg-gradient-to-r from-[#1875c7] via-[#166db4] to-[#115794] text-white shrink-0 shadow-sm">
